@@ -6,6 +6,7 @@ import com.redis.stockanalysisagent.agent.AgentType;
 import com.redis.stockanalysisagent.agent.coordinatoragent.ExecutionPlan;
 import com.redis.stockanalysisagent.agent.fundamentalsagent.FundamentalsSnapshot;
 import com.redis.stockanalysisagent.agent.marketdataagent.MarketSnapshot;
+import com.redis.stockanalysisagent.agent.newsagent.NewsSnapshot;
 import com.redis.stockanalysisagent.api.AnalysisRequest;
 import org.springframework.stereotype.Service;
 
@@ -21,13 +22,14 @@ public class SynthesisAgent {
             ExecutionPlan executionPlan,
             MarketSnapshot marketSnapshot,
             FundamentalsSnapshot fundamentalsSnapshot,
+            NewsSnapshot newsSnapshot,
             List<AgentExecution> agentExecutions
     ) {
         long pendingAgents = agentExecutions.stream()
                 .filter(execution -> execution.status() != AgentExecutionStatus.COMPLETED)
                 .count();
 
-        String baseAnswer = buildBaseAnswer(request, executionPlan, marketSnapshot, fundamentalsSnapshot);
+        String baseAnswer = buildBaseAnswer(request, executionPlan, marketSnapshot, fundamentalsSnapshot, newsSnapshot);
 
         if (pendingAgents == 0) {
             return baseAnswer;
@@ -47,8 +49,30 @@ public class SynthesisAgent {
             AnalysisRequest request,
             ExecutionPlan executionPlan,
             MarketSnapshot marketSnapshot,
-            FundamentalsSnapshot fundamentalsSnapshot
+            FundamentalsSnapshot fundamentalsSnapshot,
+            NewsSnapshot newsSnapshot
     ) {
+        if (marketSnapshot != null && fundamentalsSnapshot != null && newsSnapshot != null && !newsSnapshot.items().isEmpty()) {
+            return """
+                    Based on the currently implemented agents, %s is trading at $%s (%s%% vs. previous close).
+                    %s reported revenue of %s with revenue growth of %s and net margin of %s.
+                    Recent SEC event signals include %s on %s.
+                    The coordinator selected %s for the question "%s".
+                    """.formatted(
+                    marketSnapshot.symbol(),
+                    marketSnapshot.currentPrice(),
+                    marketSnapshot.percentChange(),
+                    fundamentalsSnapshot.companyName(),
+                    formatMoney(fundamentalsSnapshot.revenue()),
+                    formatPercent(fundamentalsSnapshot.revenueGrowthPercent()),
+                    formatPercent(fundamentalsSnapshot.netMarginPercent()),
+                    newsSnapshot.items().getFirst().title(),
+                    newsSnapshot.items().getFirst().publishedAt(),
+                    executionPlan.selectedAgents(),
+                    request.question()
+            ).replace('\n', ' ').trim();
+        }
+
         if (marketSnapshot != null && fundamentalsSnapshot != null) {
             return """
                     Based on the currently implemented agents, %s is trading at $%s (%s%% vs. previous close).
@@ -91,6 +115,21 @@ public class SynthesisAgent {
                     formatMoney(fundamentalsSnapshot.netIncome()),
                     formatPercent(fundamentalsSnapshot.revenueGrowthPercent()),
                     formatPercent(fundamentalsSnapshot.netMarginPercent()),
+                    executionPlan.selectedAgents(),
+                    request.question()
+            ).replace('\n', ' ').trim();
+        }
+
+        if (newsSnapshot != null && !newsSnapshot.items().isEmpty()) {
+            return """
+                    Recent company-event signals for %s include %s filed on %s and %s filed on %s.
+                    The coordinator selected %s for the question "%s".
+                    """.formatted(
+                    newsSnapshot.companyName(),
+                    newsSnapshot.items().get(0).form(),
+                    newsSnapshot.items().get(0).publishedAt(),
+                    newsSnapshot.items().size() > 1 ? newsSnapshot.items().get(1).form() : newsSnapshot.items().get(0).form(),
+                    newsSnapshot.items().size() > 1 ? newsSnapshot.items().get(1).publishedAt() : newsSnapshot.items().get(0).publishedAt(),
                     executionPlan.selectedAgents(),
                     request.question()
             ).replace('\n', ' ').trim();

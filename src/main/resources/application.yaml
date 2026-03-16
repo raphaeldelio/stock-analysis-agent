@@ -29,6 +29,8 @@ stock-analysis:
       api-key: ${TWELVE_DATA_API_KEY:}
   fundamentals:
     provider: sec
+  news:
+    provider: sec
   sec:
     data-base-url: https://data.sec.gov
     ticker-file-url: https://www.sec.gov/files/company_tickers.json

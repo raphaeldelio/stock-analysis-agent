@@ -22,8 +22,10 @@ Build a predictable orchestration system where:
 
 - market data: Twelve Data
 - fundamentals: SEC EDGAR / XBRL
+- news: recent SEC filings as company-event signals
 - current runtime default: Twelve Data
 - current fundamentals default: SEC
+- current news default: SEC
 - test profile default: mock market data provider
 
 If you want to force mock market data locally, use:
@@ -79,6 +81,7 @@ The first slice returns:
 - current agent execution status
 - a market snapshot from the configured provider
 - a fundamentals snapshot when fundamentals are selected
+- a news snapshot when news is selected
 - a grounded response based on the currently implemented agents
 
 For this first slice, `SynthesisAgent` is intentionally lightweight. It acts as a placeholder so the orchestration can finish end to end, and it will be promoted into a true LLM-backed agent once multiple analysis agents are implemented.
@@ -120,6 +123,19 @@ Then ask:
 - `How do AAPL fundamentals look?`
 
 The CLI should execute `FUNDAMENTALS` and print a fundamentals snapshot with `Source: sec`.
+
+To run a news-focused question backed by recent SEC filings:
+
+```bash
+./gradlew bootRun
+```
+
+Then ask:
+
+- `What recent news should I know about Apple?`
+
+The CLI should execute `NEWS` and print a recent filing snapshot with `Source: sec`.
+For this workshop slice, the news agent is intentionally company-event focused: it uses recent SEC filings as deterministic signals rather than a general macro/newswire feed.
 
 `OPENAI_API_KEY` is the preferred env var for this repo. `SPRING_AI_OPENAI_API_KEY` also works.
 Environment variables still work, but `application-local.properties` is the simplest local setup.

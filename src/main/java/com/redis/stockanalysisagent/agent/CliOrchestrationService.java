@@ -91,6 +91,17 @@ public class CliOrchestrationService {
             System.out.println("Long-term debt: " + formatMoney(response.fundamentalsSnapshot().longTermDebt()));
             System.out.println("Source: " + response.fundamentalsSnapshot().source());
         }
+        if (response.newsSnapshot() != null) {
+            System.out.println();
+            System.out.println("News snapshot");
+            System.out.println("Company: " + response.newsSnapshot().companyName());
+            response.newsSnapshot().items().stream()
+                    .limit(3)
+                    .forEach(item -> System.out.println("- " + item.publishedAt()
+                            + " | " + item.form()
+                            + " | " + item.title()));
+            System.out.println("Source: " + response.newsSnapshot().source());
+        }
         System.out.println();
 
         System.out.println("Stage 3/3: Final Answer");

@@ -6,7 +6,10 @@ import com.redis.stockanalysisagent.agent.coordinatoragent.CoordinatorRoutingAge
 import com.redis.stockanalysisagent.agent.coordinatoragent.RoutingDecision;
 import com.redis.stockanalysisagent.agent.fundamentalsagent.FundamentalsSnapshot;
 import com.redis.stockanalysisagent.agent.marketdataagent.MarketSnapshot;
+import com.redis.stockanalysisagent.agent.newsagent.NewsItem;
+import com.redis.stockanalysisagent.agent.newsagent.NewsSnapshot;
 import com.redis.stockanalysisagent.fundamentals.FundamentalsProvider;
+import com.redis.stockanalysisagent.news.NewsProvider;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -61,9 +64,12 @@ class AnalysisControllerIntegrationTest {
         );
         assertThat(response.fundamentalsSnapshot()).isNotNull();
         assertThat(response.fundamentalsSnapshot().source()).isEqualTo("test-sec");
+        assertThat(response.newsSnapshot()).isNotNull();
+        assertThat(response.newsSnapshot().source()).isEqualTo("test-sec-news");
         assertThat(response.agentExecutions().get(1).status()).isEqualTo(AgentExecutionStatus.COMPLETED);
-        assertThat(response.agentExecutions().get(2).status()).isEqualTo(AgentExecutionStatus.NOT_IMPLEMENTED);
-        assertThat(response.limitations()).contains("NEWS is not implemented yet.");
+        assertThat(response.agentExecutions().get(2).status()).isEqualTo(AgentExecutionStatus.COMPLETED);
+        assertThat(response.agentExecutions().get(3).status()).isEqualTo(AgentExecutionStatus.NOT_IMPLEMENTED);
+        assertThat(response.limitations()).contains("TECHNICAL_ANALYSIS is not implemented yet.");
     }
 
     @Test
@@ -79,6 +85,21 @@ class AnalysisControllerIntegrationTest {
         assertThat(response.fundamentalsSnapshot()).isNotNull();
         assertThat(response.marketSnapshot()).isNull();
         assertThat(response.answer()).contains("Apple Inc.");
+    }
+
+    @Test
+    void returnsDirectNewsAnswerForNewsOnlyQuestion() {
+        AnalysisResponse response = post(new AnalysisRequest(
+                "AAPL",
+                "What recent news should I know about Apple?"
+        ));
+
+        assertThat(response).isNotNull();
+        assertThat(response.executionPlan().requiresSynthesis()).isFalse();
+        assertThat(response.executionPlan().selectedAgents()).containsExactly(AgentType.NEWS);
+        assertThat(response.newsSnapshot()).isNotNull();
+        assertThat(response.answer()).contains("Recent company-event signals");
+        assertThat(response.limitations()).isEmpty();
     }
 
     private AnalysisResponse post(AnalysisRequest request) {
@@ -105,6 +126,16 @@ class AnalysisControllerIntegrationTest {
                 @Override
                 public RoutingDecision route(AnalysisRequest request) {
                     String question = request.question().toLowerCase();
+                    if (question.contains("news") && !question.contains("fundamentals") && !question.contains("technical")) {
+                        return RoutingDecision.completed(
+                                request.ticker(),
+                                request.question(),
+                                java.util.List.of(AgentType.NEWS),
+                                false,
+                                "News-only request."
+                        );
+                    }
+
                     if (question.contains("fundamentals") || question.contains("news") || question.contains("technical")) {
                         if (!question.contains("news") && !question.contains("technical")) {
                             return RoutingDecision.completed(
@@ -141,6 +172,32 @@ class AnalysisControllerIntegrationTest {
         @Primary
         FundamentalsProvider fundamentalsProvider() {
             return (ticker, marketSnapshot) -> snapshot(ticker, marketSnapshot.map(MarketSnapshot::currentPrice).orElse(null));
+        }
+
+        @Bean
+        @Primary
+        NewsProvider newsProvider() {
+            return ticker -> new NewsSnapshot(
+                    ticker.toUpperCase(),
+                    "Apple Inc.",
+                    java.util.List.of(
+                            new NewsItem(
+                                    LocalDate.parse("2026-03-15"),
+                                    "8-K",
+                                    "Current Report",
+                                    "8-K items: 2.02,9.01",
+                                    "https://www.sec.gov/example"
+                            ),
+                            new NewsItem(
+                                    LocalDate.parse("2026-02-01"),
+                                    "10-Q",
+                                    "Quarterly Report",
+                                    "Quarterly financial filing.",
+                                    "https://www.sec.gov/example-10q"
+                            )
+                    ),
+                    "test-sec-news"
+            );
         }
 
         private FundamentalsSnapshot snapshot(String ticker, BigDecimal currentPrice) {

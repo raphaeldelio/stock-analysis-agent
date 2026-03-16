@@ -205,6 +205,52 @@ Expected result:
 
 Once multiple specialized agents are implemented, `SynthesisAgent` should stop being a simple formatter and become a true LLM-backed agent. At that point, it should consume only the structured outputs of agents like `MarketDataAgent`, `FundamentalsAgent`, `NewsAgent`, and `TechnicalAnalysisAgent`, and produce the final grounded narrative for the user.
 
+## Part 4: News
+
+### Objective
+
+Introduce a deterministic news path that captures recent company-event signals without depending on a fragile third-party news quota.
+
+### What Learners Build
+
+1. A `NewsSnapshot` and `NewsItem` contract under `agent/newsagent`.
+2. A `NewsAgent` that plugs into the existing orchestration flow.
+3. A deterministic SEC-backed provider under `news/sec`.
+4. SEC submissions parsing that turns recent filings into structured recent-event items.
+5. CLI and API output that surface recent event/news items when `NEWS` is selected.
+6. A direct-answer path for news-only questions.
+7. Provider normalization tests and an integration test for the news path.
+
+### Acceptance Criteria
+
+- the news path resolves ticker-to-CIK through SEC ticker data
+- recent SEC filings are normalized into a stable news snapshot
+- the coordinator can execute `NEWS` without changing its contract
+- the response includes a news snapshot when available
+- a news-only question can return a direct answer
+- tests cover SEC filing normalization and the API happy path for news
+
+### Manual Smoke Test
+
+```bash
+./gradlew bootRun
+```
+
+Then enter:
+
+- `Request: What recent news should I know about Apple?`
+
+Expected result:
+
+- `Selected agents` contains `NEWS`
+- a news snapshot is printed in the CLI
+- `Source` is `sec`
+- the final answer references recent company-event signals
+
+### Teaching Point
+
+For this workshop slice, the news agent is deliberately narrower than a full macro/newswire agent. It treats recent SEC filings as deterministic company-event signals so learners can keep the orchestration pattern clean and free before deciding whether to add a broader commercial news provider later.
+
 ## Authoring Rule
 
 Whenever a new workshop slice lands in the codebase, update this file with:
