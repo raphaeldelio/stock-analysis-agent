@@ -1,4 +1,4 @@
-package com.redis.stockanalysisagent.marketdata.alphavantage;
+package com.redis.stockanalysisagent.marketdata.twelvedata;
 
 import com.redis.stockanalysisagent.agent.marketdataagent.MarketSnapshot;
 import org.junit.jupiter.api.Test;
@@ -16,29 +16,31 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
-class AlphaVantageMarketDataProviderTest {
+class TwelveDataMarketDataProviderTest {
 
     @Test
-    void normalizesGlobalQuoteResponseIntoMarketSnapshot() {
+    void normalizesQuoteResponseIntoMarketSnapshot() {
         RestClient.Builder restClientBuilder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(restClientBuilder).build();
-        AlphaVantageMarketDataProvider provider = new AlphaVantageMarketDataProvider(
+        TwelveDataMarketDataProvider provider = new TwelveDataMarketDataProvider(
                 restClientBuilder,
                 properties("demo")
         );
 
-        server.expect(requestTo("https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=AAPL&apikey=demo"))
+        server.expect(requestTo("https://api.twelvedata.com/quote?symbol=AAPL&apikey=demo"))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("""
                         {
-                          "Global Quote": {
-                            "01. symbol": "AAPL",
-                            "05. price": "214.3200",
-                            "07. latest trading day": "2026-03-14",
-                            "08. previous close": "211.0100",
-                            "09. change": "3.3100",
-                            "10. change percent": "1.5686%"
-                          }
+                          "symbol": "AAPL",
+                          "name": "Apple Inc",
+                          "exchange": "NASDAQ",
+                          "currency": "USD",
+                          "datetime": "2026-03-16 15:59:00",
+                          "timestamp": 1773676740,
+                          "close": "214.32",
+                          "previous_close": "211.01",
+                          "change": "3.31",
+                          "percent_change": "1.57"
                         }
                         """, MediaType.APPLICATION_JSON));
 
@@ -49,49 +51,51 @@ class AlphaVantageMarketDataProviderTest {
         assertThat(snapshot.previousClose()).hasToString("211.01");
         assertThat(snapshot.absoluteChange()).hasToString("3.31");
         assertThat(snapshot.percentChange()).hasToString("1.57");
-        assertThat(snapshot.source()).isEqualTo("alpha-vantage");
-        assertThat(snapshot.asOf()).isEqualTo(OffsetDateTime.parse("2026-03-14T00:00:00Z"));
+        assertThat(snapshot.source()).isEqualTo("twelve-data");
+        assertThat(snapshot.asOf()).isEqualTo(OffsetDateTime.parse("2026-03-16T15:59:00Z"));
 
         server.verify();
     }
 
     @Test
-    void surfacesAlphaVantageNotesAsFailures() {
+    void surfacesTwelveDataErrorsAsFailures() {
         RestClient.Builder restClientBuilder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(restClientBuilder).build();
-        AlphaVantageMarketDataProvider provider = new AlphaVantageMarketDataProvider(
+        TwelveDataMarketDataProvider provider = new TwelveDataMarketDataProvider(
                 restClientBuilder,
                 properties("demo")
         );
 
-        server.expect(requestTo("https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=AAPL&apikey=demo"))
+        server.expect(requestTo("https://api.twelvedata.com/quote?symbol=AAPL&apikey=demo"))
                 .andExpect(method(HttpMethod.GET))
                 .andRespond(withSuccess("""
                         {
-                          "Note": "Thank you for using Alpha Vantage! Our standard API rate limit is 25 requests per day."
+                          "code": 400,
+                          "message": "**symbol** parameter is missing or invalid.",
+                          "status": "error"
                         }
                         """, MediaType.APPLICATION_JSON));
 
         assertThatThrownBy(() -> provider.fetchSnapshot("AAPL"))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("Alpha Vantage note:");
+                .hasMessageContaining("Twelve Data error:");
 
         server.verify();
     }
 
     @Test
-    void failsFastWhenAlphaVantageIsEnabledWithoutAnApiKey() {
+    void failsFastWhenTwelveDataIsEnabledWithoutAnApiKey() {
         RestClient.Builder restClientBuilder = RestClient.builder();
-        AlphaVantageMarketDataProvider provider = new AlphaVantageMarketDataProvider(restClientBuilder, properties(""));
+        TwelveDataMarketDataProvider provider = new TwelveDataMarketDataProvider(restClientBuilder, properties(""));
 
         assertThatThrownBy(() -> provider.fetchSnapshot("AAPL"))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("Alpha Vantage market data is enabled");
+                .hasMessageContaining("Twelve Data market data is enabled");
     }
 
-    private AlphaVantageProperties properties(String apiKey) {
-        AlphaVantageProperties properties = new AlphaVantageProperties();
-        properties.setBaseUrl(URI.create("https://www.alphavantage.co"));
+    private TwelveDataProperties properties(String apiKey) {
+        TwelveDataProperties properties = new TwelveDataProperties();
+        properties.setBaseUrl(URI.create("https://api.twelvedata.com"));
         properties.setApiKey(apiKey);
         return properties;
     }

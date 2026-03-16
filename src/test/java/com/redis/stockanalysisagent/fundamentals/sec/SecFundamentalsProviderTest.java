@@ -172,7 +172,7 @@ class SecFundamentalsProviderTest {
                 new BigDecimal("2.00"),
                 new BigDecimal("1.01"),
                 OffsetDateTime.parse("2026-03-16T00:00:00Z"),
-                "alpha-vantage"
+                "twelve-data"
         );
 
         FundamentalsSnapshot snapshot = provider.fetchSnapshot("AAPL", Optional.of(marketSnapshot));

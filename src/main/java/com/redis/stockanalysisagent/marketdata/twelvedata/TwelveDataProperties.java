@@ -1,4 +1,4 @@
-package com.redis.stockanalysisagent.marketdata.alphavantage;
+package com.redis.stockanalysisagent.marketdata.twelvedata;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
@@ -6,10 +6,10 @@ import org.springframework.stereotype.Component;
 import java.net.URI;
 
 @Component
-@ConfigurationProperties(prefix = "stock-analysis.market-data.alpha-vantage")
-public class AlphaVantageProperties {
+@ConfigurationProperties(prefix = "stock-analysis.market-data.twelve-data")
+public class TwelveDataProperties {
 
-    private URI baseUrl = URI.create("https://www.alphavantage.co");
+    private URI baseUrl = URI.create("https://api.twelvedata.com");
     private String apiKey = "";
 
     public URI getBaseUrl() {

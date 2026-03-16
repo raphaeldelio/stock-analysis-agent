@@ -23,10 +23,10 @@ spring:
 
 stock-analysis:
   market-data:
-    provider: alpha-vantage
-    alpha-vantage:
-      base-url: https://www.alphavantage.co
-      api-key: ${ALPHA_VANTAGE_API_KEY:}
+    provider: twelve-data
+    twelve-data:
+      base-url: https://api.twelvedata.com
+      api-key: ${TWELVE_DATA_API_KEY:}
   fundamentals:
     provider: sec
   sec:

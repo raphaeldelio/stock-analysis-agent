@@ -71,7 +71,7 @@ STOCK_ANALYSIS_MARKET_DATA_PROVIDER=mock \
 Recommended local setup:
 
 - create `application-local.properties` from `application-local.properties.example`
-- put your OpenAI key, Alpha Vantage key, and SEC user-agent there
+- put your OpenAI key, Twelve Data key, and SEC user-agent there
 - run `./gradlew bootRun`
 
 Example request:
@@ -126,12 +126,12 @@ If a chat model is not configured yet, use the automated test suite as the valid
 
 ### Objective
 
-Replace the mock market data provider with a real Alpha Vantage integration without changing the orchestration flow.
+Replace the mock market data provider with a real Twelve Data integration without changing the orchestration flow.
 
 ### Planned Scope
 
-- add Alpha Vantage configuration
-- implement `AlphaVantageMarketDataProvider`
+- add Twelve Data configuration
+- implement `TwelveDataMarketDataProvider`
 - keep `MarketDataAgent` unchanged at the orchestration level
 - add normalization tests for provider output
 
@@ -156,8 +156,8 @@ Expected result:
 
 - the coordinator still resolves the request through clarification
 - `Selected agents` contains only `MARKET_DATA`
-- `Source` is `alpha-vantage`
-- the final answer uses the Alpha Vantage quote instead of the mock snapshot
+- `Source` is `twelve-data`
+- the final answer uses the Twelve Data quote instead of the mock snapshot
 
 ## Part 3: Fundamentals
 

@@ -20,9 +20,9 @@ Build a predictable orchestration system where:
 
 ## Provider Strategy
 
-- market data: Alpha Vantage
+- market data: Twelve Data
 - fundamentals: SEC EDGAR / XBRL
-- current runtime default: Alpha Vantage
+- current runtime default: Twelve Data
 - current fundamentals default: SEC
 - test profile default: mock market data provider
 
@@ -47,7 +47,7 @@ Create `application-local.properties` and add values like:
 
 ```properties
 spring.ai.openai.api-key=YOUR_OPENAI_KEY
-stock-analysis.market-data.alpha-vantage.api-key=YOUR_ALPHA_VANTAGE_KEY
+stock-analysis.market-data.twelve-data.api-key=YOUR_TWELVE_DATA_API_KEY
 stock-analysis.sec.user-agent=stock-analysis-agent your-email@example.com
 ```
 
@@ -106,7 +106,7 @@ STOCK_ANALYSIS_MARKET_DATA_PROVIDER=mock \
 ./gradlew bootRun
 ```
 
-When Alpha Vantage mode is active, the CLI output should show `Source: alpha-vantage`.
+When Twelve Data mode is active, the CLI output should show `Source: twelve-data`.
 When mock mode is active, it should show `Source: mock`.
 
 To run a fundamentals-only question backed by the SEC APIs:
