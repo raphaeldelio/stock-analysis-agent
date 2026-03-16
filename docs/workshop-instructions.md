@@ -100,7 +100,7 @@ If a chat model is not configured yet, use the automated test suite as the valid
 
 - Keep orchestration deterministic even when routing is model-assisted.
 - Let the coordinator decide whether it can proceed, but keep the conversation loop in Java.
-- The staged CLI output is just a teaching presentation for this slice; the long-term goal is dynamic orchestration, not a permanently linear workflow.
+- The CLI output is sectioned for readability, but the long-term goal is dynamic orchestration, not a permanently linear workflow.
 - Do not let agents call each other directly.
 - Separate orchestration metadata from domain payloads.
 - Use mock data first so the architecture is proven before real integrations are added.
@@ -341,6 +341,44 @@ Expected result:
 ### Teaching Point
 
 This slice is where the project fully demonstrates the workshop pattern: specialized agents gather deterministic signals, and a single synthesis agent turns those structured results into the final narrative. The model interprets; it does not retrieve or calculate the underlying facts.
+
+## Part 7: Dynamic Orchestration
+
+### Objective
+
+Refactor orchestration so agent execution is driven by the coordinator plan instead of a hardcoded chain, and make the flow degrade cleanly when one selected agent fails.
+
+### What Learners Build
+
+1. A small dispatch loop over the selected agents in the execution plan.
+2. A shared execution state that collects structured outputs and execution statuses.
+3. Per-agent failure handling so one provider failure does not end the whole request.
+4. Final-answer logic that still synthesizes from the successful agents.
+5. Test coverage for degraded multi-agent execution.
+
+### Acceptance Criteria
+
+- selected agents are executed from the plan rather than from a fixed if-chain
+- one failing agent does not crash the whole orchestration run
+- failed agents appear in the execution status list
+- limitations include meaningful failure messages
+- a broad request can still return an answer from the successful agents
+
+### Manual Smoke Test
+
+Use a broad request such as:
+
+- `Request: Give me a full view on Apple with fundamentals, news, and technical analysis`
+
+Expected result:
+
+- multiple agents execute from the selected plan
+- the final answer still returns even if one selected provider fails
+- CLI output shows which agent failed and which ones completed
+
+### Teaching Point
+
+This slice is the real shift from “workflow demo” to orchestration. The coordinator already chose the route earlier; here the runtime starts to honor that plan dynamically and tolerate partial failure without hiding what happened.
 
 ## Authoring Rule
 

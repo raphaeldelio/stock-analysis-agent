@@ -40,7 +40,7 @@ public class CliOrchestrationService {
         System.out.println("Message: " + initialRequest);
         System.out.println();
 
-        System.out.println("Stage 1/3: Coordinator Agent");
+        System.out.println("Coordinator");
         System.out.println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
         RoutingDecision routingDecision = coordinatorAgent.execute(initialRequest);
@@ -53,7 +53,7 @@ public class CliOrchestrationService {
         if (routingDecision.getFinishReason() != RoutingDecision.FinishReason.COMPLETED) {
             printCoordinatorSummary(routingDecision, null);
             System.out.println();
-            System.out.println("Stage 2/2: Final Answer");
+            System.out.println("Final Answer");
             System.out.println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
             System.out.println(resolveCoordinatorMessage(routingDecision));
             System.out.println();
@@ -66,7 +66,7 @@ public class CliOrchestrationService {
 
         printCoordinatorSummary(routingDecision, response);
 
-        System.out.println("Stage 2/3: Agent Execution");
+        System.out.println("Execution");
         System.out.println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
         response.agentExecutions().forEach(execution ->
                 System.out.println(execution.agentType() + " -> " + execution.status() + " | " + execution.summary())
@@ -128,8 +128,8 @@ public class CliOrchestrationService {
             System.out.println("Source: " + response.technicalAnalysisSnapshot().source());
         }
         System.out.println();
-        
-        System.out.println("Stage 3/3: Final Answer");
+
+        System.out.println("Final Analysis");
         System.out.println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
         System.out.println(response.answer());
         if (!response.limitations().isEmpty()) {

@@ -80,6 +80,29 @@ class AnalysisControllerIntegrationTest {
     }
 
     @Test
+    void continuesWhenOneSelectedAgentFails() {
+        AnalysisResponse response = post(new AnalysisRequest(
+                "FAILNEWS",
+                "Give me a full view with fundamentals, news, and technical analysis."
+        ));
+
+        assertThat(response).isNotNull();
+        assertThat(response.marketSnapshot()).isNotNull();
+        assertThat(response.fundamentalsSnapshot()).isNotNull();
+        assertThat(response.technicalAnalysisSnapshot()).isNotNull();
+        assertThat(response.newsSnapshot()).isNull();
+        assertThat(response.agentExecutions())
+                .anyMatch(execution -> execution.agentType() == AgentType.NEWS
+                        && execution.status() == AgentExecutionStatus.FAILED);
+        assertThat(response.agentExecutions())
+                .anyMatch(execution -> execution.agentType() == AgentType.SYNTHESIS
+                        && execution.status() == AgentExecutionStatus.COMPLETED);
+        assertThat(response.limitations())
+                .anyMatch(limit -> limit.contains("NEWS failed"));
+        assertThat(response.answer()).isNotBlank();
+    }
+
+    @Test
     void returnsDirectFundamentalsAnswerForFundamentalsOnlyQuestion() {
         AnalysisResponse response = post(new AnalysisRequest(
                 "AAPL",
@@ -226,7 +249,12 @@ class AnalysisControllerIntegrationTest {
         @Bean
         @Primary
         NewsProvider newsProvider() {
-            return ticker -> new NewsSnapshot(
+            return ticker -> {
+                if ("FAILNEWS".equalsIgnoreCase(ticker)) {
+                    throw new IllegalStateException("Simulated news failure for degraded orchestration test.");
+                }
+
+                return new NewsSnapshot(
                     ticker.toUpperCase(),
                     "Apple Inc.",
                     java.util.List.of(
@@ -250,7 +278,8 @@ class AnalysisControllerIntegrationTest {
                     java.util.List.of(),
                     null,
                     "test-sec-news"
-            );
+                );
+            };
         }
 
         @Bean

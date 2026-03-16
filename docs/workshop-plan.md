@@ -36,6 +36,7 @@ Build a stock-analysis multi-agent orchestration application with Spring AI wher
   - Hybrid news agent with SEC signals, Tavily web search, and normalization tests
   - Technical analysis agent with Twelve Data time series and indicator tests
   - LLM-backed synthesis agent with deterministic fallback for test/no-model runs
+  - Dynamic orchestration dispatch with per-agent failure handling
 - In progress
   - True orchestration milestone
 - Next up
@@ -72,8 +73,9 @@ If a milestone cannot be verified through all three, it is not done.
 - `POST /analysis` is the current HTTP entrypoint.
 - `CommandLineRunner` enables CLI mode when `app.cli.enabled=true`.
 - `agent/CliOrchestrationService` starts from a free-form request, loops on coordinator follow-up prompts, and prints the current slice in a console-friendly format.
-- the staged CLI output is only a teaching view for the current slice and should not be mistaken for the final architecture.
+- the CLI output is intentionally sectioned for teaching, but it should not be mistaken for a permanently linear workflow.
 - `agent/AgentOrchestrationService` coordinates the current slice.
+- `agent/AgentOrchestrationService` now dispatches selected agents dynamically instead of hardcoding one growing execution chain.
 - `agent/coordinatoragent/CoordinatorAgent` owns coordinator execution, plan normalization, and request normalization.
 - `agent/coordinatoragent/CoordinatorRoutingAgent` is a concrete class that uses Spring AI structured output plus lightweight chat memory for runtime routing and clarification.
 - the project now uses the Spring AI OpenAI starter for local model access.
@@ -94,6 +96,7 @@ If a milestone cannot be verified through all three, it is not done.
 - local secrets and per-machine settings can live in an optional git-ignored `application-local.properties` file at the repository root.
 - `agent/synthesisagent/SynthesisAgent` is now a true LLM-backed agent at runtime and consumes only structured outputs from the specialized agents.
 - in test and no-model runs, `agent/synthesisagent/SynthesisAgent` falls back to a deterministic synthesis path so the workshop remains runnable without credentials.
+- selected agents can now fail independently without crashing the entire request; failures are surfaced in agent execution status and limitations.
 - Integration and orchestration tests are green and provide a simple routing override for repeatable verification.
 
 ## Package Shape
@@ -113,8 +116,8 @@ This keeps the workshop centered on agents rather than on a generic `analysis` p
 ## Immediate Backlog
 
 1. Refine the coordinator prompt and routing decision shape now that market, fundamentals, news, technical analysis, and synthesis are all real.
-2. Refactor orchestration dispatch so execution feels less like a fixed pipeline and more like dynamic coordination.
-3. Add safer partial-failure handling before parallel fan-out.
+2. Add safe parallel fan-out for independent agents.
+3. Improve facilitator guidance and smoke tests for degraded execution scenarios.
 
 ## Deferred Scope
 

@@ -10,6 +10,7 @@ Build a predictable orchestration system where:
 - a coordinator decides which specialized agents are relevant
 - agents fetch deterministic data from external providers
 - a synthesis step returns a grounded final answer
+- one agent failing does not crash the whole analysis
 
 ## Current Direction
 
@@ -89,6 +90,7 @@ The first slice returns:
 - a grounded response based on the currently implemented agents
 
 When multiple specialized agents are selected, `SynthesisAgent` now uses Spring AI to produce the final grounded response from the structured agent outputs. In test and no-model setups, it falls back to a deterministic synthesis so the workshop remains runnable.
+The orchestration layer now dispatches agents dynamically from the execution plan and degrades cleanly when one selected agent fails.
 
 ## CLI Mode
 

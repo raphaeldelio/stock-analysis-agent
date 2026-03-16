@@ -73,111 +73,188 @@ public class AgentOrchestrationService {
         }
 
         ExecutionPlan executionPlan = coordinatorAgent.createPlan(routingDecision);
-        List<AgentExecution> agentExecutions = new ArrayList<>();
-        List<String> limitations = new ArrayList<>();
-
-        MarketSnapshot marketSnapshot = null;
-        FundamentalsSnapshot fundamentalsSnapshot = null;
-        NewsSnapshot newsSnapshot = null;
-        TechnicalAnalysisSnapshot technicalAnalysisSnapshot = null;
-        if (executionPlan.selectedAgents().contains(AgentType.MARKET_DATA)) {
-            MarketDataResult marketDataResult = marketDataAgent.execute(request.ticker());
-            marketSnapshot = marketDataResult.getFinalResponse();
-            agentExecutions.add(new AgentExecution(
-                    AgentType.MARKET_DATA,
-                    AgentExecutionStatus.COMPLETED,
-                    "Market Data Agent fetched a snapshot from the configured provider."
-            ));
-        }
-
-        if (executionPlan.selectedAgents().contains(AgentType.FUNDAMENTALS)) {
-            FundamentalsResult fundamentalsResult = marketSnapshot != null
-                    ? fundamentalsAgent.execute(request.ticker(), marketSnapshot)
-                    : fundamentalsAgent.execute(request.ticker());
-            fundamentalsSnapshot = fundamentalsResult.getFinalResponse();
-            agentExecutions.add(new AgentExecution(
-                    AgentType.FUNDAMENTALS,
-                    AgentExecutionStatus.COMPLETED,
-                    "Fundamentals Agent analyzed SEC company facts for the requested ticker."
-            ));
-        }
-
-        if (executionPlan.selectedAgents().contains(AgentType.NEWS)) {
-            NewsResult newsResult = newsAgent.execute(request.ticker(), request.question());
-            newsSnapshot = newsResult.getFinalResponse();
-            agentExecutions.add(new AgentExecution(
-                    AgentType.NEWS,
-                    AgentExecutionStatus.COMPLETED,
-                    "News Agent collected recent company-event signals and web news relevant to the requested ticker."
-            ));
-        }
-
-        if (executionPlan.selectedAgents().contains(AgentType.TECHNICAL_ANALYSIS)) {
-            TechnicalAnalysisResult technicalAnalysisResult = technicalAnalysisAgent.execute(request.ticker());
-            technicalAnalysisSnapshot = technicalAnalysisResult.getFinalResponse();
-            agentExecutions.add(new AgentExecution(
-                    AgentType.TECHNICAL_ANALYSIS,
-                    AgentExecutionStatus.COMPLETED,
-                    "Technical Analysis Agent calculated SMA, EMA, and RSI from Twelve Data price history."
-            ));
-        }
-
-        for (AgentType agentType : executionPlan.selectedAgents()) {
-            if (agentType == AgentType.MARKET_DATA
-                    || agentType == AgentType.FUNDAMENTALS
-                    || agentType == AgentType.NEWS
-                    || agentType == AgentType.TECHNICAL_ANALYSIS
-                    || agentType == AgentType.SYNTHESIS) {
-                continue;
-            }
-
-            agentExecutions.add(new AgentExecution(
-                    agentType,
-                    AgentExecutionStatus.NOT_IMPLEMENTED,
-                    "This agent is part of the orchestration plan but has not been implemented yet."
-            ));
-            limitations.add(agentType + " is not implemented yet.");
-        }
-
-        String answer = shouldUseDirectMarketAnswer(executionPlan, marketSnapshot)
-                ? marketDataAgent.createDirectAnswer(marketSnapshot)
-                : shouldUseDirectFundamentalsAnswer(executionPlan, fundamentalsSnapshot)
-                ? fundamentalsAgent.createDirectAnswer(fundamentalsSnapshot)
-                : shouldUseDirectNewsAnswer(executionPlan, newsSnapshot)
-                ? newsAgent.createDirectAnswer(newsSnapshot)
-                : shouldUseDirectTechnicalAnswer(executionPlan, technicalAnalysisSnapshot)
-                ? technicalAnalysisAgent.createDirectAnswer(technicalAnalysisSnapshot)
-                : synthesisAgent.synthesize(
-                        request,
-                        executionPlan,
-                        marketSnapshot,
-                        fundamentalsSnapshot,
-                        newsSnapshot,
-                        technicalAnalysisSnapshot,
-                        agentExecutions
-                );
-
-        if (executionPlan.requiresSynthesis()) {
-            agentExecutions.add(new AgentExecution(
-                    AgentType.SYNTHESIS,
-                    AgentExecutionStatus.COMPLETED,
-                    "Synthesis Agent combined the available agent outputs into the final response."
-            ));
-        }
+        ExecutionState state = executeSelectedAgents(request, executionPlan);
+        String answer = buildAnswer(request, executionPlan, state);
 
         return new AnalysisResponse(
                 request.ticker().toUpperCase(),
                 request.question(),
                 OffsetDateTime.now(),
                 executionPlan,
-                List.copyOf(agentExecutions),
-                marketSnapshot,
-                fundamentalsSnapshot,
-                newsSnapshot,
-                technicalAnalysisSnapshot,
+                List.copyOf(state.agentExecutions),
+                state.marketSnapshot,
+                state.fundamentalsSnapshot,
+                state.newsSnapshot,
+                state.technicalAnalysisSnapshot,
                 answer,
-                List.copyOf(limitations)
+                List.copyOf(state.limitations)
         );
+    }
+
+    private ExecutionState executeSelectedAgents(AnalysisRequest request, ExecutionPlan executionPlan) {
+        ExecutionState state = new ExecutionState();
+        for (AgentType agentType : executionPlan.selectedAgents()) {
+            if (agentType == AgentType.SYNTHESIS) {
+                continue;
+            }
+
+            executeAgent(agentType, request, state);
+        }
+        return state;
+    }
+
+    private void executeAgent(AgentType agentType, AnalysisRequest request, ExecutionState state) {
+        try {
+            switch (agentType) {
+                case MARKET_DATA -> executeMarketData(request, state);
+                case FUNDAMENTALS -> executeFundamentals(request, state);
+                case NEWS -> executeNews(request, state);
+                case TECHNICAL_ANALYSIS -> executeTechnicalAnalysis(request, state);
+                case SYNTHESIS -> state.agentExecutions.add(new AgentExecution(
+                        AgentType.SYNTHESIS,
+                        AgentExecutionStatus.SKIPPED,
+                        "Synthesis is evaluated after the specialized agents finish."
+                ));
+                default -> markNotImplemented(agentType, state);
+            }
+        } catch (RuntimeException ex) {
+            state.agentExecutions.add(new AgentExecution(
+                    agentType,
+                    AgentExecutionStatus.FAILED,
+                    "%s failed: %s".formatted(agentLabel(agentType), normalizeErrorMessage(ex))
+            ));
+            state.limitations.add("%s failed: %s".formatted(agentType, normalizeErrorMessage(ex)));
+        }
+    }
+
+    private void executeMarketData(AnalysisRequest request, ExecutionState state) {
+        MarketDataResult marketDataResult = marketDataAgent.execute(request.ticker());
+        state.marketSnapshot = marketDataResult.getFinalResponse();
+        state.agentExecutions.add(new AgentExecution(
+                AgentType.MARKET_DATA,
+                AgentExecutionStatus.COMPLETED,
+                "Market Data Agent fetched a snapshot from the configured provider."
+        ));
+    }
+
+    private void executeFundamentals(AnalysisRequest request, ExecutionState state) {
+        FundamentalsResult fundamentalsResult = state.marketSnapshot != null
+                ? fundamentalsAgent.execute(request.ticker(), state.marketSnapshot)
+                : fundamentalsAgent.execute(request.ticker());
+        state.fundamentalsSnapshot = fundamentalsResult.getFinalResponse();
+        state.agentExecutions.add(new AgentExecution(
+                AgentType.FUNDAMENTALS,
+                AgentExecutionStatus.COMPLETED,
+                "Fundamentals Agent analyzed SEC company facts for the requested ticker."
+        ));
+    }
+
+    private void executeNews(AnalysisRequest request, ExecutionState state) {
+        NewsResult newsResult = newsAgent.execute(request.ticker(), request.question());
+        state.newsSnapshot = newsResult.getFinalResponse();
+        state.agentExecutions.add(new AgentExecution(
+                AgentType.NEWS,
+                AgentExecutionStatus.COMPLETED,
+                "News Agent collected recent company-event signals and web news relevant to the requested ticker."
+        ));
+    }
+
+    private void executeTechnicalAnalysis(AnalysisRequest request, ExecutionState state) {
+        TechnicalAnalysisResult technicalAnalysisResult = technicalAnalysisAgent.execute(request.ticker());
+        state.technicalAnalysisSnapshot = technicalAnalysisResult.getFinalResponse();
+        state.agentExecutions.add(new AgentExecution(
+                AgentType.TECHNICAL_ANALYSIS,
+                AgentExecutionStatus.COMPLETED,
+                "Technical Analysis Agent calculated SMA, EMA, and RSI from Twelve Data price history."
+        ));
+    }
+
+    private void markNotImplemented(AgentType agentType, ExecutionState state) {
+        state.agentExecutions.add(new AgentExecution(
+                agentType,
+                AgentExecutionStatus.NOT_IMPLEMENTED,
+                "This agent is part of the orchestration plan but has not been implemented yet."
+        ));
+        state.limitations.add(agentType + " is not implemented yet.");
+    }
+
+    private String buildAnswer(AnalysisRequest request, ExecutionPlan executionPlan, ExecutionState state) {
+        if (shouldUseDirectMarketAnswer(executionPlan, state.marketSnapshot)) {
+            return marketDataAgent.createDirectAnswer(state.marketSnapshot);
+        }
+
+        if (shouldUseDirectFundamentalsAnswer(executionPlan, state.fundamentalsSnapshot)) {
+            return fundamentalsAgent.createDirectAnswer(state.fundamentalsSnapshot);
+        }
+
+        if (shouldUseDirectNewsAnswer(executionPlan, state.newsSnapshot)) {
+            return newsAgent.createDirectAnswer(state.newsSnapshot);
+        }
+
+        if (shouldUseDirectTechnicalAnswer(executionPlan, state.technicalAnalysisSnapshot)) {
+            return technicalAnalysisAgent.createDirectAnswer(state.technicalAnalysisSnapshot);
+        }
+
+        if (hasAnyStructuredOutputs(state)) {
+            String synthesizedAnswer = synthesisAgent.synthesize(
+                    request,
+                    executionPlan,
+                    state.marketSnapshot,
+                    state.fundamentalsSnapshot,
+                    state.newsSnapshot,
+                    state.technicalAnalysisSnapshot,
+                    state.agentExecutions
+            );
+
+            if (executionPlan.requiresSynthesis()) {
+                state.agentExecutions.add(new AgentExecution(
+                        AgentType.SYNTHESIS,
+                        AgentExecutionStatus.COMPLETED,
+                        "Synthesis Agent combined the available agent outputs into the final response."
+                ));
+            }
+
+            return synthesizedAnswer;
+        }
+
+        if (executionPlan.requiresSynthesis()) {
+            state.agentExecutions.add(new AgentExecution(
+                    AgentType.SYNTHESIS,
+                    AgentExecutionStatus.SKIPPED,
+                    "Synthesis was skipped because no specialized agent outputs were available."
+            ));
+        }
+
+        if (!state.limitations.isEmpty()) {
+            return "I could not complete the requested analysis. %s".formatted(String.join(" ", state.limitations));
+        }
+
+        return "I could not complete the requested analysis with the currently available agent outputs.";
+    }
+
+    private boolean hasAnyStructuredOutputs(ExecutionState state) {
+        return state.marketSnapshot != null
+                || state.fundamentalsSnapshot != null
+                || state.newsSnapshot != null
+                || state.technicalAnalysisSnapshot != null;
+    }
+
+    private String agentLabel(AgentType agentType) {
+        return switch (agentType) {
+            case MARKET_DATA -> "Market Data Agent";
+            case FUNDAMENTALS -> "Fundamentals Agent";
+            case NEWS -> "News Agent";
+            case TECHNICAL_ANALYSIS -> "Technical Analysis Agent";
+            case SYNTHESIS -> "Synthesis Agent";
+        };
+    }
+
+    private String normalizeErrorMessage(RuntimeException ex) {
+        String message = ex.getMessage();
+        if (message == null || message.isBlank()) {
+            return ex.getClass().getSimpleName();
+        }
+        return message.replace('\n', ' ').trim();
     }
 
     private String resolveCoordinatorMessage(RoutingDecision routingDecision) {
@@ -226,5 +303,14 @@ public class AgentOrchestrationService {
                 && !executionPlan.requiresSynthesis()
                 && executionPlan.selectedAgents().size() == 1
                 && executionPlan.selectedAgents().contains(AgentType.TECHNICAL_ANALYSIS);
+    }
+
+    private static class ExecutionState {
+        private final List<AgentExecution> agentExecutions = new ArrayList<>();
+        private final List<String> limitations = new ArrayList<>();
+        private MarketSnapshot marketSnapshot;
+        private FundamentalsSnapshot fundamentalsSnapshot;
+        private NewsSnapshot newsSnapshot;
+        private TechnicalAnalysisSnapshot technicalAnalysisSnapshot;
     }
 }
