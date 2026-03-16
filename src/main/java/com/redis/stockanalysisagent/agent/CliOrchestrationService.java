@@ -115,6 +115,18 @@ public class CliOrchestrationService {
             }
             System.out.println("Source: " + response.newsSnapshot().source());
         }
+        if (response.technicalAnalysisSnapshot() != null) {
+            System.out.println();
+            System.out.println("Technical analysis snapshot");
+            System.out.println("Interval: " + response.technicalAnalysisSnapshot().interval());
+            System.out.println("Latest close: $" + response.technicalAnalysisSnapshot().latestClose());
+            System.out.println("SMA(20): $" + response.technicalAnalysisSnapshot().sma20());
+            System.out.println("EMA(20): $" + response.technicalAnalysisSnapshot().ema20());
+            System.out.println("RSI(14): " + response.technicalAnalysisSnapshot().rsi14());
+            System.out.println("Trend: " + response.technicalAnalysisSnapshot().trendSignal());
+            System.out.println("Momentum: " + response.technicalAnalysisSnapshot().momentumSignal());
+            System.out.println("Source: " + response.technicalAnalysisSnapshot().source());
+        }
         System.out.println();
         
         System.out.println("Stage 3/3: Final Answer");

@@ -7,6 +7,7 @@ import com.redis.stockanalysisagent.agent.coordinatoragent.ExecutionPlan;
 import com.redis.stockanalysisagent.agent.fundamentalsagent.FundamentalsSnapshot;
 import com.redis.stockanalysisagent.agent.marketdataagent.MarketSnapshot;
 import com.redis.stockanalysisagent.agent.newsagent.NewsSnapshot;
+import com.redis.stockanalysisagent.agent.technicalanalysisagent.TechnicalAnalysisSnapshot;
 import com.redis.stockanalysisagent.api.AnalysisRequest;
 import org.springframework.stereotype.Service;
 
@@ -23,13 +24,21 @@ public class SynthesisAgent {
             MarketSnapshot marketSnapshot,
             FundamentalsSnapshot fundamentalsSnapshot,
             NewsSnapshot newsSnapshot,
+            TechnicalAnalysisSnapshot technicalAnalysisSnapshot,
             List<AgentExecution> agentExecutions
     ) {
         long pendingAgents = agentExecutions.stream()
                 .filter(execution -> execution.status() != AgentExecutionStatus.COMPLETED)
                 .count();
 
-        String baseAnswer = buildBaseAnswer(request, executionPlan, marketSnapshot, fundamentalsSnapshot, newsSnapshot);
+        String baseAnswer = buildBaseAnswer(
+                request,
+                executionPlan,
+                marketSnapshot,
+                fundamentalsSnapshot,
+                newsSnapshot,
+                technicalAnalysisSnapshot
+        );
 
         if (pendingAgents == 0) {
             return baseAnswer;
@@ -50,13 +59,19 @@ public class SynthesisAgent {
             ExecutionPlan executionPlan,
             MarketSnapshot marketSnapshot,
             FundamentalsSnapshot fundamentalsSnapshot,
-            NewsSnapshot newsSnapshot
+            NewsSnapshot newsSnapshot,
+            TechnicalAnalysisSnapshot technicalAnalysisSnapshot
     ) {
-        if (marketSnapshot != null && fundamentalsSnapshot != null && newsSnapshot != null && hasNews(newsSnapshot)) {
+        if (marketSnapshot != null
+                && fundamentalsSnapshot != null
+                && newsSnapshot != null
+                && hasNews(newsSnapshot)
+                && technicalAnalysisSnapshot != null) {
             return """
                     Based on the currently implemented agents, %s is trading at $%s (%s%% vs. previous close).
                     %s reported revenue of %s with revenue growth of %s and net margin of %s.
                     Recent news signals include %s.
+                    Technical signals are %s with %s momentum and RSI(14) at %s.
                     The coordinator selected %s for the question "%s".
                     """.formatted(
                     marketSnapshot.symbol(),
@@ -67,6 +82,26 @@ public class SynthesisAgent {
                     formatPercent(fundamentalsSnapshot.revenueGrowthPercent()),
                     formatPercent(fundamentalsSnapshot.netMarginPercent()),
                     newsHighlight(newsSnapshot),
+                    technicalAnalysisSnapshot.trendSignal().toLowerCase(),
+                    technicalAnalysisSnapshot.momentumSignal().toLowerCase(),
+                    technicalAnalysisSnapshot.rsi14(),
+                    executionPlan.selectedAgents(),
+                    request.question()
+            ).replace('\n', ' ').trim();
+        }
+
+        if (marketSnapshot != null && technicalAnalysisSnapshot != null) {
+            return """
+                    Based on the currently implemented agents, %s is trading at $%s (%s%% vs. previous close).
+                    Technical signals are %s with %s momentum and RSI(14) at %s.
+                    The coordinator selected %s for the question "%s".
+                    """.formatted(
+                    marketSnapshot.symbol(),
+                    marketSnapshot.currentPrice(),
+                    marketSnapshot.percentChange(),
+                    technicalAnalysisSnapshot.trendSignal().toLowerCase(),
+                    technicalAnalysisSnapshot.momentumSignal().toLowerCase(),
+                    technicalAnalysisSnapshot.rsi14(),
                     executionPlan.selectedAgents(),
                     request.question()
             ).replace('\n', ' ').trim();
@@ -126,6 +161,24 @@ public class SynthesisAgent {
                     """.formatted(
                     newsSnapshot.companyName(),
                     newsHighlight(newsSnapshot),
+                    executionPlan.selectedAgents(),
+                    request.question()
+            ).replace('\n', ' ').trim();
+        }
+
+        if (technicalAnalysisSnapshot != null) {
+            return """
+                    Technical signals for %s are %s with %s momentum.
+                    RSI(14) is %s, with the latest close at $%s versus SMA(20) $%s and EMA(20) $%s.
+                    The coordinator selected %s for the question "%s".
+                    """.formatted(
+                    technicalAnalysisSnapshot.ticker(),
+                    technicalAnalysisSnapshot.trendSignal().toLowerCase(),
+                    technicalAnalysisSnapshot.momentumSignal().toLowerCase(),
+                    technicalAnalysisSnapshot.rsi14(),
+                    technicalAnalysisSnapshot.latestClose(),
+                    technicalAnalysisSnapshot.sma20(),
+                    technicalAnalysisSnapshot.ema20(),
                     executionPlan.selectedAgents(),
                     request.question()
             ).replace('\n', ' ').trim();

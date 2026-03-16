@@ -8,10 +8,12 @@ import com.redis.stockanalysisagent.agent.fundamentalsagent.FundamentalsSnapshot
 import com.redis.stockanalysisagent.agent.marketdataagent.MarketSnapshot;
 import com.redis.stockanalysisagent.agent.newsagent.NewsItem;
 import com.redis.stockanalysisagent.agent.newsagent.NewsSnapshot;
+import com.redis.stockanalysisagent.agent.technicalanalysisagent.TechnicalAnalysisSnapshot;
 import com.redis.stockanalysisagent.fundamentals.FundamentalsProvider;
 import com.redis.stockanalysisagent.news.NewsProvider;
 import com.redis.stockanalysisagent.news.tavily.TavilyNewsProvider;
 import com.redis.stockanalysisagent.news.tavily.TavilyNewsSearchResult;
+import com.redis.stockanalysisagent.technicalanalysis.TechnicalAnalysisProvider;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -69,10 +71,12 @@ class AnalysisControllerIntegrationTest {
         assertThat(response.newsSnapshot()).isNotNull();
         assertThat(response.newsSnapshot().source()).isEqualTo("test-sec-news+tavily");
         assertThat(response.newsSnapshot().webItems()).hasSize(1);
+        assertThat(response.technicalAnalysisSnapshot()).isNotNull();
+        assertThat(response.technicalAnalysisSnapshot().source()).isEqualTo("test-twelve-data");
         assertThat(response.agentExecutions().get(1).status()).isEqualTo(AgentExecutionStatus.COMPLETED);
         assertThat(response.agentExecutions().get(2).status()).isEqualTo(AgentExecutionStatus.COMPLETED);
-        assertThat(response.agentExecutions().get(3).status()).isEqualTo(AgentExecutionStatus.NOT_IMPLEMENTED);
-        assertThat(response.limitations()).contains("TECHNICAL_ANALYSIS is not implemented yet.");
+        assertThat(response.agentExecutions().get(3).status()).isEqualTo(AgentExecutionStatus.COMPLETED);
+        assertThat(response.limitations()).isEmpty();
     }
 
     @Test
@@ -105,6 +109,21 @@ class AnalysisControllerIntegrationTest {
         assertThat(response.limitations()).isEmpty();
     }
 
+    @Test
+    void returnsDirectTechnicalAnswerForTechnicalOnlyQuestion() {
+        AnalysisResponse response = post(new AnalysisRequest(
+                "AAPL",
+                "What do the technicals look like for Apple?"
+        ));
+
+        assertThat(response).isNotNull();
+        assertThat(response.executionPlan().requiresSynthesis()).isFalse();
+        assertThat(response.executionPlan().selectedAgents()).containsExactly(AgentType.TECHNICAL_ANALYSIS);
+        assertThat(response.technicalAnalysisSnapshot()).isNotNull();
+        assertThat(response.answer()).contains("Technical signals");
+        assertThat(response.limitations()).isEmpty();
+    }
+
     private AnalysisResponse post(AnalysisRequest request) {
         return RestClient.builder()
                 .baseUrl("http://localhost:" + port)
@@ -129,6 +148,16 @@ class AnalysisControllerIntegrationTest {
                 @Override
                 public RoutingDecision route(AnalysisRequest request) {
                     String question = request.question().toLowerCase();
+                    if (question.contains("technical") && !question.contains("fundamentals") && !question.contains("news")) {
+                        return RoutingDecision.completed(
+                                request.ticker(),
+                                request.question(),
+                                java.util.List.of(AgentType.TECHNICAL_ANALYSIS),
+                                false,
+                                "Technical-only request."
+                        );
+                    }
+
                     if (question.contains("news") && !question.contains("fundamentals") && !question.contains("technical")) {
                         return RoutingDecision.completed(
                                 request.ticker(),
@@ -175,6 +204,23 @@ class AnalysisControllerIntegrationTest {
         @Primary
         FundamentalsProvider fundamentalsProvider() {
             return (ticker, marketSnapshot) -> snapshot(ticker, marketSnapshot.map(MarketSnapshot::currentPrice).orElse(null));
+        }
+
+        @Bean
+        @Primary
+        TechnicalAnalysisProvider technicalAnalysisProvider() {
+            return ticker -> new TechnicalAnalysisSnapshot(
+                    ticker.toUpperCase(),
+                    "1day",
+                    OffsetDateTime.parse("2026-03-16T00:00:00Z"),
+                    new BigDecimal("120.00"),
+                    new BigDecimal("110.50"),
+                    new BigDecimal("110.50"),
+                    new BigDecimal("100.00"),
+                    "BULLISH",
+                    "OVERBOUGHT",
+                    "test-twelve-data"
+            );
         }
 
         @Bean

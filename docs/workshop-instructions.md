@@ -254,6 +254,54 @@ Expected result:
 
 For this workshop slice, the news agent is deliberately hybrid. It keeps SEC filings for official company-event signals and uses Tavily web search for broader investor-relevant coverage. That lets learners see how to mix deterministic official data with a search service without giving up orchestration control.
 
+## Part 5: Technical Analysis
+
+### Objective
+
+Introduce a deterministic technical-analysis path that computes indicators in Java from Twelve Data price history.
+
+### What Learners Build
+
+1. A `TechnicalAnalysisSnapshot` contract under `agent/technicalanalysisagent`.
+2. A `TechnicalAnalysisAgent` that plugs into the existing orchestration flow.
+3. A deterministic provider under `technicalanalysis/twelvedata`.
+4. Twelve Data time-series retrieval for the selected ticker.
+5. Java calculations for `SMA(20)`, `EMA(20)`, and `RSI(14)`.
+6. Trend and momentum labels derived from those indicators.
+7. CLI and API output that surface the technical-analysis snapshot.
+8. A direct-answer path for technical-only questions.
+9. Provider normalization tests and an integration test for the technical path.
+
+### Acceptance Criteria
+
+- the technical-analysis path retrieves a stable Twelve Data time series
+- indicators are calculated in Java rather than by the LLM
+- the coordinator can execute `TECHNICAL_ANALYSIS` without changing its contract
+- the response includes a technical-analysis snapshot when available
+- a technical-only question can return a direct answer
+- tests cover indicator normalization and the API happy path for technical analysis
+
+### Manual Smoke Test
+
+```bash
+./gradlew bootRun
+```
+
+Then enter:
+
+- `Request: What do the technicals look like for Apple?`
+
+Expected result:
+
+- `Selected agents` contains `TECHNICAL_ANALYSIS`
+- a technical-analysis snapshot is printed in the CLI
+- `Source` is `twelve-data`
+- the final answer references trend, momentum, and the indicator values
+
+### Teaching Point
+
+This slice reinforces one of the main workshop rules: the model should not calculate market indicators. Java computes the indicators, and the orchestration layer decides when the technical-analysis agent should run.
+
 ## Authoring Rule
 
 Whenever a new workshop slice lands in the codebase, update this file with:

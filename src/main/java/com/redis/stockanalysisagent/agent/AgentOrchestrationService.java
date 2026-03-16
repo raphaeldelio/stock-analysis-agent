@@ -13,6 +13,9 @@ import com.redis.stockanalysisagent.agent.newsagent.NewsAgent;
 import com.redis.stockanalysisagent.agent.newsagent.NewsResult;
 import com.redis.stockanalysisagent.agent.newsagent.NewsSnapshot;
 import com.redis.stockanalysisagent.agent.synthesisagent.SynthesisAgent;
+import com.redis.stockanalysisagent.agent.technicalanalysisagent.TechnicalAnalysisAgent;
+import com.redis.stockanalysisagent.agent.technicalanalysisagent.TechnicalAnalysisResult;
+import com.redis.stockanalysisagent.agent.technicalanalysisagent.TechnicalAnalysisSnapshot;
 import com.redis.stockanalysisagent.api.AnalysisRequest;
 import com.redis.stockanalysisagent.api.AnalysisResponse;
 import org.springframework.stereotype.Service;
@@ -28,6 +31,7 @@ public class AgentOrchestrationService {
     private final MarketDataAgent marketDataAgent;
     private final FundamentalsAgent fundamentalsAgent;
     private final NewsAgent newsAgent;
+    private final TechnicalAnalysisAgent technicalAnalysisAgent;
     private final SynthesisAgent synthesisAgent;
 
     public AgentOrchestrationService(
@@ -35,12 +39,14 @@ public class AgentOrchestrationService {
             MarketDataAgent marketDataAgent,
             FundamentalsAgent fundamentalsAgent,
             NewsAgent newsAgent,
+            TechnicalAnalysisAgent technicalAnalysisAgent,
             SynthesisAgent synthesisAgent
     ) {
         this.coordinatorAgent = coordinatorAgent;
         this.marketDataAgent = marketDataAgent;
         this.fundamentalsAgent = fundamentalsAgent;
         this.newsAgent = newsAgent;
+        this.technicalAnalysisAgent = technicalAnalysisAgent;
         this.synthesisAgent = synthesisAgent;
     }
 
@@ -60,6 +66,7 @@ public class AgentOrchestrationService {
                     null,
                     null,
                     null,
+                    null,
                     resolveCoordinatorMessage(routingDecision),
                     List.of("Coordinator could not produce an execution plan.")
             );
@@ -72,6 +79,7 @@ public class AgentOrchestrationService {
         MarketSnapshot marketSnapshot = null;
         FundamentalsSnapshot fundamentalsSnapshot = null;
         NewsSnapshot newsSnapshot = null;
+        TechnicalAnalysisSnapshot technicalAnalysisSnapshot = null;
         if (executionPlan.selectedAgents().contains(AgentType.MARKET_DATA)) {
             MarketDataResult marketDataResult = marketDataAgent.execute(request.ticker());
             marketSnapshot = marketDataResult.getFinalResponse();
@@ -104,10 +112,21 @@ public class AgentOrchestrationService {
             ));
         }
 
+        if (executionPlan.selectedAgents().contains(AgentType.TECHNICAL_ANALYSIS)) {
+            TechnicalAnalysisResult technicalAnalysisResult = technicalAnalysisAgent.execute(request.ticker());
+            technicalAnalysisSnapshot = technicalAnalysisResult.getFinalResponse();
+            agentExecutions.add(new AgentExecution(
+                    AgentType.TECHNICAL_ANALYSIS,
+                    AgentExecutionStatus.COMPLETED,
+                    "Technical Analysis Agent calculated SMA, EMA, and RSI from Twelve Data price history."
+            ));
+        }
+
         for (AgentType agentType : executionPlan.selectedAgents()) {
             if (agentType == AgentType.MARKET_DATA
                     || agentType == AgentType.FUNDAMENTALS
                     || agentType == AgentType.NEWS
+                    || agentType == AgentType.TECHNICAL_ANALYSIS
                     || agentType == AgentType.SYNTHESIS) {
                 continue;
             }
@@ -126,7 +145,17 @@ public class AgentOrchestrationService {
                 ? fundamentalsAgent.createDirectAnswer(fundamentalsSnapshot)
                 : shouldUseDirectNewsAnswer(executionPlan, newsSnapshot)
                 ? newsAgent.createDirectAnswer(newsSnapshot)
-                : synthesisAgent.synthesize(request, executionPlan, marketSnapshot, fundamentalsSnapshot, newsSnapshot, agentExecutions);
+                : shouldUseDirectTechnicalAnswer(executionPlan, technicalAnalysisSnapshot)
+                ? technicalAnalysisAgent.createDirectAnswer(technicalAnalysisSnapshot)
+                : synthesisAgent.synthesize(
+                        request,
+                        executionPlan,
+                        marketSnapshot,
+                        fundamentalsSnapshot,
+                        newsSnapshot,
+                        technicalAnalysisSnapshot,
+                        agentExecutions
+                );
 
         if (executionPlan.requiresSynthesis()) {
             agentExecutions.add(new AgentExecution(
@@ -145,6 +174,7 @@ public class AgentOrchestrationService {
                 marketSnapshot,
                 fundamentalsSnapshot,
                 newsSnapshot,
+                technicalAnalysisSnapshot,
                 answer,
                 List.copyOf(limitations)
         );
@@ -186,5 +216,15 @@ public class AgentOrchestrationService {
                 && !executionPlan.requiresSynthesis()
                 && executionPlan.selectedAgents().size() == 1
                 && executionPlan.selectedAgents().contains(AgentType.NEWS);
+    }
+
+    private boolean shouldUseDirectTechnicalAnswer(
+            ExecutionPlan executionPlan,
+            TechnicalAnalysisSnapshot technicalAnalysisSnapshot
+    ) {
+        return technicalAnalysisSnapshot != null
+                && !executionPlan.requiresSynthesis()
+                && executionPlan.selectedAgents().size() == 1
+                && executionPlan.selectedAgents().contains(AgentType.TECHNICAL_ANALYSIS);
     }
 }

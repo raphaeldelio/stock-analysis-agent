@@ -23,9 +23,11 @@ Build a predictable orchestration system where:
 - market data: Twelve Data
 - fundamentals: SEC EDGAR / XBRL
 - news: hybrid SEC filings plus Tavily web search
+- technical analysis: Twelve Data time series with Java-calculated indicators
 - current runtime default: Twelve Data
 - current fundamentals default: SEC
 - current news default: SEC plus optional Tavily enrichment
+- current technical-analysis default: Twelve Data
 - test profile default: mock market data provider
 
 If you want to force mock market data locally, use:
@@ -83,6 +85,7 @@ The first slice returns:
 - a market snapshot from the configured provider
 - a fundamentals snapshot when fundamentals are selected
 - a news snapshot when news is selected
+- a technical-analysis snapshot when technical analysis is selected
 - a grounded response based on the currently implemented agents
 
 For this first slice, `SynthesisAgent` is intentionally lightweight. It acts as a placeholder so the orchestration can finish end to end, and it will be promoted into a true LLM-backed agent once multiple analysis agents are implemented.
@@ -138,6 +141,18 @@ Then ask:
 The CLI should execute `NEWS` and print a recent filing snapshot with `Source: sec`.
 If a Tavily key is configured, the CLI should also print a `Web news` section and the source should become `sec+tavily`.
 This hybrid setup keeps official SEC disclosures while adding broader investor-relevant web coverage.
+
+To run a technical-analysis question backed by Twelve Data time series:
+
+```bash
+./gradlew bootRun
+```
+
+Then ask:
+
+- `What do the technicals look like for Apple?`
+
+The CLI should execute `TECHNICAL_ANALYSIS` and print indicators such as `SMA(20)`, `EMA(20)`, and `RSI(14)` with `Source: twelve-data`.
 
 `OPENAI_API_KEY` is the preferred env var for this repo. `SPRING_AI_OPENAI_API_KEY` also works.
 Environment variables still work, but `application-local.properties` is the simplest local setup.

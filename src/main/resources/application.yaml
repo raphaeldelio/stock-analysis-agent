@@ -35,6 +35,13 @@ stock-analysis:
       base-url: https://api.tavily.com
       api-key: ${TAVILY_API_KEY:}
       max-results: 5
+  technical-analysis:
+    provider: twelve-data
+    interval: 1day
+    output-size: 60
+    sma-period: 20
+    ema-period: 20
+    rsi-period: 14
   sec:
     data-base-url: https://data.sec.gov
     ticker-file-url: https://www.sec.gov/files/company_tickers.json
