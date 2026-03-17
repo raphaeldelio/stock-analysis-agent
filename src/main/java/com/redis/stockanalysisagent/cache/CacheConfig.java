@@ -43,7 +43,7 @@ public class CacheConfig {
                         CacheNames.SEC_TICKER_INDEX, defaults.entryTtl(Duration.ofHours(24)),
                         CacheNames.SEC_COMPANY_FACTS, defaults.entryTtl(Duration.ofHours(12)),
                         CacheNames.SEC_SUBMISSIONS, defaults.entryTtl(Duration.ofMinutes(15)),
-                        CacheNames.TAVILY_NEWS_SEARCH, defaults.entryTtl(Duration.ofMinutes(10))
+                        CacheNames.TAVILY_NEWS_SEARCH, defaults.entryTtl(Duration.ofHours(24))
                 ))
                 .build();
     }

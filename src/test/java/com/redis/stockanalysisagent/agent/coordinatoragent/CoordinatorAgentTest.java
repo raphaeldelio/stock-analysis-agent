@@ -121,7 +121,7 @@ class CoordinatorAgentTest {
         }
 
         @Override
-        public RoutingDecision route(String userMessage, String conversationId) {
+        public RoutingDecision route(String userMessage) {
             return routingDecision;
         }
     }

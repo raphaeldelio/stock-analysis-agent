@@ -57,7 +57,7 @@ public class CoordinatorAgent {
     }
 
     public RoutingDecision execute(String userMessage, String conversationId) {
-        RoutingDecision routingDecision = coordinatorRoutingAgent.route(userMessage, conversationId);
+        RoutingDecision routingDecision = coordinatorRoutingAgent.route(userMessage);
         if (routingDecision.getFinishReason() == RoutingDecision.FinishReason.NEEDS_MORE_INPUT) {
             routingDecision.setConversationId(conversationId);
         }
