@@ -106,4 +106,82 @@ class StockAnalysisChatToolsTest {
                 });
         verify(semanticAnalysisCache).store("What is Apple's current price?", "Apple is trading at $200.00.");
     }
+
+    @Test
+    void accumulatesTriggeredAgentsAcrossMultipleToolCallsInTheSameTurn() {
+        CoordinatorAgent coordinatorAgent = mock(CoordinatorAgent.class);
+        AgentOrchestrationService orchestrationService = mock(AgentOrchestrationService.class);
+        SemanticAnalysisCache semanticAnalysisCache = mock(SemanticAnalysisCache.class);
+
+        RoutingDecision fundamentalsDecision = RoutingDecision.completed(
+                "TSLA",
+                "How do Tesla's fundamentals look?",
+                List.of(AgentType.FUNDAMENTALS),
+                false,
+                "Fundamentals request."
+        );
+        RoutingDecision technicalDecision = RoutingDecision.completed(
+                "TSLA",
+                "What do Tesla's technicals look like?",
+                List.of(AgentType.TECHNICAL_ANALYSIS),
+                false,
+                "Technical request."
+        );
+
+        AnalysisRequest fundamentalsRequest = new AnalysisRequest("TSLA", "How do Tesla's fundamentals look?");
+        AnalysisRequest technicalRequest = new AnalysisRequest("TSLA", "What do Tesla's technicals look like?");
+
+        AnalysisResponse fundamentalsResponse = new AnalysisResponse(
+                "TSLA",
+                "How do Tesla's fundamentals look?",
+                OffsetDateTime.parse("2026-03-17T00:00:00Z"),
+                new ExecutionPlan(List.of(AgentType.FUNDAMENTALS), false, "Fundamentals request."),
+                List.of(new AgentExecution(AgentType.FUNDAMENTALS, AgentExecutionStatus.COMPLETED, "Fundamentals completed.", 310)),
+                null,
+                null,
+                null,
+                null,
+                "Tesla fundamentals summary.",
+                List.of()
+        );
+        AnalysisResponse technicalResponse = new AnalysisResponse(
+                "TSLA",
+                "What do Tesla's technicals look like?",
+                OffsetDateTime.parse("2026-03-17T00:00:01Z"),
+                new ExecutionPlan(List.of(AgentType.TECHNICAL_ANALYSIS), false, "Technical request."),
+                List.of(new AgentExecution(AgentType.TECHNICAL_ANALYSIS, AgentExecutionStatus.COMPLETED, "Technical completed.", 470)),
+                null,
+                null,
+                null,
+                null,
+                "Tesla technical summary.",
+                List.of()
+        );
+
+        when(semanticAnalysisCache.findAnswer(any(String.class))).thenReturn(Optional.empty());
+        when(coordinatorAgent.execute("How do Tesla's fundamentals look?")).thenReturn(fundamentalsDecision);
+        when(coordinatorAgent.execute("What do Tesla's technicals look like?")).thenReturn(technicalDecision);
+        when(coordinatorAgent.toAnalysisRequest(fundamentalsDecision)).thenReturn(fundamentalsRequest);
+        when(coordinatorAgent.toAnalysisRequest(technicalDecision)).thenReturn(technicalRequest);
+        when(orchestrationService.processRequest(fundamentalsRequest, fundamentalsDecision)).thenReturn(fundamentalsResponse);
+        when(orchestrationService.processRequest(technicalRequest, technicalDecision)).thenReturn(technicalResponse);
+
+        StockAnalysisChatTools chatTools = new StockAnalysisChatTools(
+                coordinatorAgent,
+                orchestrationService,
+                semanticAnalysisCache
+        );
+
+        chatTools.analyzeStockRequest("How do Tesla's fundamentals look?");
+        chatTools.analyzeStockRequest("What do Tesla's technicals look like?");
+        StockAnalysisChatTools.ToolResultMetadata metadata = chatTools.consumeInvocationMetadata();
+
+        assertThat(metadata.fromSemanticCache()).isFalse();
+        assertThat(metadata.triggeredAgents())
+                .extracting(AgentExecution::agentType)
+                .containsExactly(AgentType.FUNDAMENTALS, AgentType.TECHNICAL_ANALYSIS);
+        assertThat(metadata.triggeredAgents())
+                .extracting(AgentExecution::durationMs)
+                .containsExactly(310L, 470L);
+    }
 }

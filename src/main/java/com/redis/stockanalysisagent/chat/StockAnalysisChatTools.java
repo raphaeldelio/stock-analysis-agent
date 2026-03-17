@@ -11,7 +11,9 @@ import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @Component
 public class StockAnalysisChatTools {
@@ -21,7 +23,7 @@ public class StockAnalysisChatTools {
     private final CoordinatorAgent coordinatorAgent;
     private final AgentOrchestrationService agentOrchestrationService;
     private final SemanticAnalysisCache semanticAnalysisCache;
-    private final ThreadLocal<ToolResultMetadata> invocationMetadata = ThreadLocal.withInitial(() -> NOT_FROM_CACHE);
+    private final ThreadLocal<ToolResultAccumulator> invocationMetadata = ThreadLocal.withInitial(ToolResultAccumulator::new);
 
     public StockAnalysisChatTools(
             CoordinatorAgent coordinatorAgent,
@@ -38,11 +40,10 @@ public class StockAnalysisChatTools {
             @ToolParam(description = "The user's stock-analysis request in plain English, including any ticker or company reference resolved from conversation context.")
             String request
     ) {
-        invocationMetadata.set(NOT_FROM_CACHE);
-
+        ToolResultAccumulator metadata = invocationMetadata.get();
         java.util.Optional<String> cachedResponse = semanticAnalysisCache.findAnswer(request);
         if (cachedResponse.isPresent()) {
-            invocationMetadata.set(new ToolResultMetadata(true, List.of()));
+            metadata.recordInvocation(true, List.of());
             return cachedResponse.get();
         }
 
@@ -59,7 +60,7 @@ public class StockAnalysisChatTools {
         AnalysisRequest analysisRequest = coordinatorAgent.toAnalysisRequest(routingDecision);
         AnalysisResponse response = agentOrchestrationService.processRequest(analysisRequest, routingDecision);
         String renderedResponse = renderAnalysis(response);
-        invocationMetadata.set(new ToolResultMetadata(false, extractTriggeredAgents(response)));
+        metadata.recordInvocation(false, extractTriggeredAgents(response));
         if (response.limitations().isEmpty()) {
             semanticAnalysisCache.store(request, renderedResponse);
         }
@@ -71,9 +72,9 @@ public class StockAnalysisChatTools {
     }
 
     public ToolResultMetadata consumeInvocationMetadata() {
-        ToolResultMetadata metadata = invocationMetadata.get();
+        ToolResultAccumulator metadata = invocationMetadata.get();
         invocationMetadata.remove();
-        return metadata == null ? NOT_FROM_CACHE : metadata;
+        return metadata == null ? NOT_FROM_CACHE : metadata.snapshot();
     }
 
     private String resolveCoordinatorMessage(RoutingDecision routingDecision) {
@@ -110,5 +111,66 @@ public class StockAnalysisChatTools {
             boolean fromSemanticCache,
             List<AgentExecution> triggeredAgents
     ) {
+    }
+
+    private static final class ToolResultAccumulator {
+
+        private int invocationCount;
+        private boolean allFromSemanticCache = true;
+        private final Map<String, AgentExecution> triggeredAgents = new LinkedHashMap<>();
+
+        private void recordInvocation(boolean fromSemanticCache, List<AgentExecution> agentExecutions) {
+            invocationCount += 1;
+            allFromSemanticCache = allFromSemanticCache && fromSemanticCache;
+
+            for (AgentExecution agentExecution : agentExecutions) {
+                String key = agentExecution.agentType().name();
+                triggeredAgents.merge(key, agentExecution, ToolResultAccumulator::mergeAgentExecution);
+            }
+        }
+
+        private ToolResultMetadata snapshot() {
+            if (invocationCount == 0) {
+                return NOT_FROM_CACHE;
+            }
+
+            return new ToolResultMetadata(
+                    allFromSemanticCache,
+                    List.copyOf(triggeredAgents.values())
+            );
+        }
+
+        private static AgentExecution mergeAgentExecution(AgentExecution existing, AgentExecution incoming) {
+            return new AgentExecution(
+                    incoming.agentType(),
+                    mergeStatus(existing, incoming),
+                    mergeSummary(existing, incoming),
+                    existing.durationMs() + incoming.durationMs()
+            );
+        }
+
+        private static com.redis.stockanalysisagent.agent.AgentExecutionStatus mergeStatus(
+                AgentExecution existing,
+                AgentExecution incoming
+        ) {
+            return severity(existing) >= severity(incoming) ? existing.status() : incoming.status();
+        }
+
+        private static int severity(AgentExecution execution) {
+            return switch (execution.status()) {
+                case FAILED -> 4;
+                case NOT_IMPLEMENTED -> 3;
+                case SKIPPED -> 2;
+                case COMPLETED -> 1;
+            };
+        }
+
+        private static String mergeSummary(AgentExecution existing, AgentExecution incoming) {
+            if (incoming.summary() != null && !incoming.summary().isBlank()) {
+                return incoming.summary();
+            }
+
+            return existing.summary();
+        }
     }
 }
