@@ -300,9 +300,7 @@
 
         const content = document.createElement("div");
         content.className = "message__content";
-        const paragraph = document.createElement("p");
-        paragraph.textContent = message.content;
-        content.appendChild(paragraph);
+        appendMessageContent(content, message);
         article.appendChild(content);
 
         const supplements = buildSupplementPanels(message);
@@ -382,6 +380,136 @@
         wrapper.appendChild(list);
 
         return wrapper;
+    }
+
+    function appendMessageContent(container, message) {
+        if (message.role === "assistant" && !message.variant) {
+            renderMarkdownContent(container, message.content);
+            return;
+        }
+
+        const paragraph = document.createElement("p");
+        paragraph.textContent = message.content;
+        container.appendChild(paragraph);
+    }
+
+    function renderMarkdownContent(container, markdown) {
+        const lines = String(markdown || "").replace(/\r\n?/g, "\n").split("\n");
+        let index = 0;
+        let paragraphLines = [];
+
+        function flushParagraph() {
+            if (paragraphLines.length === 0) {
+                return;
+            }
+
+            const paragraph = document.createElement("p");
+            appendInlineMarkdown(paragraph, paragraphLines.join(" "));
+            container.appendChild(paragraph);
+            paragraphLines = [];
+        }
+
+        while (index < lines.length) {
+            const line = lines[index];
+            const trimmed = line.trim();
+
+            if (!trimmed) {
+                flushParagraph();
+                index += 1;
+                continue;
+            }
+
+            const headingMatch = trimmed.match(/^(#{1,6})\s+(.*)$/);
+            if (headingMatch) {
+                flushParagraph();
+                const level = Math.min(headingMatch[1].length, 6);
+                const heading = document.createElement("h" + level);
+                appendInlineMarkdown(heading, headingMatch[2]);
+                container.appendChild(heading);
+                index += 1;
+                continue;
+            }
+
+            const unorderedMatch = trimmed.match(/^[-*]\s+(.*)$/);
+            const orderedMatch = trimmed.match(/^\d+\.\s+(.*)$/);
+            if (unorderedMatch || orderedMatch) {
+                flushParagraph();
+                const list = document.createElement(orderedMatch ? "ol" : "ul");
+
+                while (index < lines.length) {
+                    const listLine = lines[index].trim();
+                    const currentUnordered = listLine.match(/^[-*]\s+(.*)$/);
+                    const currentOrdered = listLine.match(/^\d+\.\s+(.*)$/);
+                    const currentMatch = orderedMatch ? currentOrdered : currentUnordered;
+
+                    if (!currentMatch) {
+                        break;
+                    }
+
+                    const item = document.createElement("li");
+                    appendInlineMarkdown(item, currentMatch[1]);
+                    list.appendChild(item);
+                    index += 1;
+                }
+
+                container.appendChild(list);
+                continue;
+            }
+
+            paragraphLines.push(trimmed);
+            index += 1;
+        }
+
+        flushParagraph();
+
+        if (!container.hasChildNodes()) {
+            const paragraph = document.createElement("p");
+            paragraph.textContent = markdown;
+            container.appendChild(paragraph);
+        }
+    }
+
+    function appendInlineMarkdown(parent, text) {
+        const pattern = /(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\([^)]+\))/g;
+        let lastIndex = 0;
+        let match;
+
+        while ((match = pattern.exec(text)) !== null) {
+            if (match.index > lastIndex) {
+                parent.appendChild(document.createTextNode(text.slice(lastIndex, match.index)));
+            }
+
+            const token = match[0];
+            if (token.startsWith("**") && token.endsWith("**")) {
+                const strong = document.createElement("strong");
+                strong.textContent = token.slice(2, -2);
+                parent.appendChild(strong);
+            } else if (token.startsWith("`") && token.endsWith("`")) {
+                const code = document.createElement("code");
+                code.textContent = token.slice(1, -1);
+                parent.appendChild(code);
+            } else if (token.startsWith("[")) {
+                const linkMatch = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+                if (linkMatch) {
+                    const anchor = document.createElement("a");
+                    anchor.href = linkMatch[2];
+                    anchor.textContent = linkMatch[1];
+                    anchor.target = "_blank";
+                    anchor.rel = "noreferrer noopener";
+                    parent.appendChild(anchor);
+                } else {
+                    parent.appendChild(document.createTextNode(token));
+                }
+            } else {
+                parent.appendChild(document.createTextNode(token));
+            }
+
+            lastIndex = pattern.lastIndex;
+        }
+
+        if (lastIndex < text.length) {
+            parent.appendChild(document.createTextNode(text.slice(lastIndex)));
+        }
     }
 
     function buildTypingIndicator() {
