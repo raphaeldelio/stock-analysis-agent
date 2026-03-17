@@ -11,6 +11,7 @@ Build a predictable orchestration system where:
 - agents fetch deterministic data from external providers
 - a synthesis step returns a grounded final answer
 - one agent failing does not crash the whole analysis
+- independent agents can fan out safely in parallel
 
 ## Current Direction
 
@@ -91,6 +92,7 @@ The first slice returns:
 
 When multiple specialized agents are selected, `SynthesisAgent` now uses Spring AI to produce the final grounded response from the structured agent outputs. In test and no-model setups, it falls back to a deterministic synthesis so the workshop remains runnable.
 The orchestration layer now dispatches agents dynamically from the execution plan and degrades cleanly when one selected agent fails.
+Independent agents now fan out through `CompletableFuture` on a Spring-managed executor, while synthesis still waits for the selected analysis tasks to finish.
 
 ## CLI Mode
 
@@ -167,6 +169,7 @@ Then ask:
 - `Give me a full view on Apple with fundamentals, news, and technical analysis`
 
 With a configured chat model, the final answer should be synthesized by the model from the structured outputs of the specialized agents.
+The CLI still prints execution summaries in a stable order for readability, but the selected agents now execute concurrently under the hood when they do not depend on each other.
 
 `OPENAI_API_KEY` is the preferred env var for this repo. `SPRING_AI_OPENAI_API_KEY` also works.
 Environment variables still work, but `application-local.properties` is the simplest local setup.

@@ -18,11 +18,18 @@ import com.redis.stockanalysisagent.agent.technicalanalysisagent.TechnicalAnalys
 import com.redis.stockanalysisagent.agent.technicalanalysisagent.TechnicalAnalysisSnapshot;
 import com.redis.stockanalysisagent.api.AnalysisRequest;
 import com.redis.stockanalysisagent.api.AnalysisResponse;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.core.task.TaskExecutor;
 import org.springframework.stereotype.Service;
 
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.function.Supplier;
 
 @Service
 public class AgentOrchestrationService {
@@ -33,6 +40,7 @@ public class AgentOrchestrationService {
     private final NewsAgent newsAgent;
     private final TechnicalAnalysisAgent technicalAnalysisAgent;
     private final SynthesisAgent synthesisAgent;
+    private final TaskExecutor agentTaskExecutor;
 
     public AgentOrchestrationService(
             CoordinatorAgent coordinatorAgent,
@@ -40,7 +48,8 @@ public class AgentOrchestrationService {
             FundamentalsAgent fundamentalsAgent,
             NewsAgent newsAgent,
             TechnicalAnalysisAgent technicalAnalysisAgent,
-            SynthesisAgent synthesisAgent
+            SynthesisAgent synthesisAgent,
+            @Qualifier("agentTaskExecutor") TaskExecutor agentTaskExecutor
     ) {
         this.coordinatorAgent = coordinatorAgent;
         this.marketDataAgent = marketDataAgent;
@@ -48,6 +57,7 @@ public class AgentOrchestrationService {
         this.newsAgent = newsAgent;
         this.technicalAnalysisAgent = technicalAnalysisAgent;
         this.synthesisAgent = synthesisAgent;
+        this.agentTaskExecutor = agentTaskExecutor;
     }
 
     public AnalysisResponse processRequest(AnalysisRequest request) {
@@ -93,89 +103,186 @@ public class AgentOrchestrationService {
 
     private ExecutionState executeSelectedAgents(AnalysisRequest request, ExecutionPlan executionPlan) {
         ExecutionState state = new ExecutionState();
+        Map<AgentType, CompletableFuture<AgentExecutionOutcome>> executionFutures = new LinkedHashMap<>();
+        CompletableFuture<AgentExecutionOutcome> marketFuture = null;
+
+        if (executionPlan.selectedAgents().contains(AgentType.MARKET_DATA)) {
+            marketFuture = submitAsync(AgentType.MARKET_DATA, () -> executeMarketData(request));
+            executionFutures.put(AgentType.MARKET_DATA, marketFuture);
+        }
+
         for (AgentType agentType : executionPlan.selectedAgents()) {
             if (agentType == AgentType.SYNTHESIS) {
                 continue;
             }
 
-            executeAgent(agentType, request, state);
+            if (agentType == AgentType.MARKET_DATA) {
+                continue;
+            }
+
+            CompletableFuture<AgentExecutionOutcome> future = switch (agentType) {
+                case FUNDAMENTALS -> marketFuture != null
+                        ? marketFuture.thenApplyAsync(
+                                marketOutcome -> executeFundamentals(request, marketOutcome.marketSnapshot),
+                                agentTaskExecutor
+                        ).exceptionally(ex -> failedOutcome(AgentType.FUNDAMENTALS, ex))
+                        : submitAsync(AgentType.FUNDAMENTALS, () -> executeFundamentals(request, null));
+                case NEWS -> submitAsync(AgentType.NEWS, () -> executeNews(request));
+                case TECHNICAL_ANALYSIS -> submitAsync(
+                        AgentType.TECHNICAL_ANALYSIS,
+                        () -> executeTechnicalAnalysis(request)
+                );
+                case MARKET_DATA -> executionFutures.get(AgentType.MARKET_DATA);
+                case SYNTHESIS -> CompletableFuture.completedFuture(failedOutcome(
+                        AgentType.SYNTHESIS,
+                        new IllegalStateException("Synthesis should execute only after the specialized agents finish.")
+                ));
+            };
+
+            executionFutures.put(agentType, future);
         }
+
+        CompletableFuture.allOf(executionFutures.values().toArray(CompletableFuture[]::new)).join();
+
+        for (AgentType agentType : executionPlan.selectedAgents()) {
+            if (agentType == AgentType.SYNTHESIS) {
+                continue;
+            }
+
+            AgentExecutionOutcome outcome = executionFutures.get(agentType).join();
+            mergeOutcome(state, outcome);
+        }
+
         return state;
     }
 
-    private void executeAgent(AgentType agentType, AnalysisRequest request, ExecutionState state) {
+    private CompletableFuture<AgentExecutionOutcome> submitAsync(
+            AgentType agentType,
+            Supplier<AgentExecutionOutcome> task
+    ) {
+        return CompletableFuture.supplyAsync(task, agentTaskExecutor)
+                .exceptionally(ex -> failedOutcome(agentType, ex));
+    }
+
+    private AgentExecutionOutcome executeMarketData(AnalysisRequest request) {
         try {
-            switch (agentType) {
-                case MARKET_DATA -> executeMarketData(request, state);
-                case FUNDAMENTALS -> executeFundamentals(request, state);
-                case NEWS -> executeNews(request, state);
-                case TECHNICAL_ANALYSIS -> executeTechnicalAnalysis(request, state);
-                case SYNTHESIS -> state.agentExecutions.add(new AgentExecution(
-                        AgentType.SYNTHESIS,
-                        AgentExecutionStatus.SKIPPED,
-                        "Synthesis is evaluated after the specialized agents finish."
-                ));
-                default -> markNotImplemented(agentType, state);
-            }
+            MarketDataResult marketDataResult = marketDataAgent.execute(request.ticker());
+            return AgentExecutionOutcome.completed(
+                    new AgentExecution(
+                            AgentType.MARKET_DATA,
+                            AgentExecutionStatus.COMPLETED,
+                            "Market Data Agent fetched a snapshot from the configured provider."
+                    ),
+                    null,
+                    marketDataResult.getFinalResponse(),
+                    null,
+                    null,
+                    null
+            );
         } catch (RuntimeException ex) {
-            state.agentExecutions.add(new AgentExecution(
-                    agentType,
-                    AgentExecutionStatus.FAILED,
-                    "%s failed: %s".formatted(agentLabel(agentType), normalizeErrorMessage(ex))
-            ));
-            state.limitations.add("%s failed: %s".formatted(agentType, normalizeErrorMessage(ex)));
+            return failedOutcome(AgentType.MARKET_DATA, ex);
         }
     }
 
-    private void executeMarketData(AnalysisRequest request, ExecutionState state) {
-        MarketDataResult marketDataResult = marketDataAgent.execute(request.ticker());
-        state.marketSnapshot = marketDataResult.getFinalResponse();
-        state.agentExecutions.add(new AgentExecution(
-                AgentType.MARKET_DATA,
-                AgentExecutionStatus.COMPLETED,
-                "Market Data Agent fetched a snapshot from the configured provider."
-        ));
+    private AgentExecutionOutcome executeFundamentals(AnalysisRequest request, MarketSnapshot marketSnapshot) {
+        try {
+            FundamentalsResult fundamentalsResult = marketSnapshot != null
+                    ? fundamentalsAgent.execute(request.ticker(), marketSnapshot)
+                    : fundamentalsAgent.execute(request.ticker());
+
+            return AgentExecutionOutcome.completed(
+                    new AgentExecution(
+                            AgentType.FUNDAMENTALS,
+                            AgentExecutionStatus.COMPLETED,
+                            marketSnapshot != null
+                                    ? "Fundamentals Agent analyzed SEC company facts with market-price context."
+                                    : "Fundamentals Agent analyzed SEC company facts for the requested ticker."
+                    ),
+                    null,
+                    null,
+                    fundamentalsResult.getFinalResponse(),
+                    null,
+                    null
+            );
+        } catch (RuntimeException ex) {
+            return failedOutcome(AgentType.FUNDAMENTALS, ex);
+        }
     }
 
-    private void executeFundamentals(AnalysisRequest request, ExecutionState state) {
-        FundamentalsResult fundamentalsResult = state.marketSnapshot != null
-                ? fundamentalsAgent.execute(request.ticker(), state.marketSnapshot)
-                : fundamentalsAgent.execute(request.ticker());
-        state.fundamentalsSnapshot = fundamentalsResult.getFinalResponse();
-        state.agentExecutions.add(new AgentExecution(
-                AgentType.FUNDAMENTALS,
-                AgentExecutionStatus.COMPLETED,
-                "Fundamentals Agent analyzed SEC company facts for the requested ticker."
-        ));
+    private AgentExecutionOutcome executeNews(AnalysisRequest request) {
+        try {
+            NewsResult newsResult = newsAgent.execute(request.ticker(), request.question());
+            return AgentExecutionOutcome.completed(
+                    new AgentExecution(
+                            AgentType.NEWS,
+                            AgentExecutionStatus.COMPLETED,
+                            "News Agent collected recent company-event signals and web news relevant to the requested ticker."
+                    ),
+                    null,
+                    null,
+                    null,
+                    newsResult.getFinalResponse(),
+                    null
+            );
+        } catch (RuntimeException ex) {
+            return failedOutcome(AgentType.NEWS, ex);
+        }
     }
 
-    private void executeNews(AnalysisRequest request, ExecutionState state) {
-        NewsResult newsResult = newsAgent.execute(request.ticker(), request.question());
-        state.newsSnapshot = newsResult.getFinalResponse();
-        state.agentExecutions.add(new AgentExecution(
-                AgentType.NEWS,
-                AgentExecutionStatus.COMPLETED,
-                "News Agent collected recent company-event signals and web news relevant to the requested ticker."
-        ));
+    private AgentExecutionOutcome executeTechnicalAnalysis(AnalysisRequest request) {
+        try {
+            TechnicalAnalysisResult technicalAnalysisResult = technicalAnalysisAgent.execute(request.ticker());
+            return AgentExecutionOutcome.completed(
+                    new AgentExecution(
+                            AgentType.TECHNICAL_ANALYSIS,
+                            AgentExecutionStatus.COMPLETED,
+                            "Technical Analysis Agent calculated SMA, EMA, and RSI from Twelve Data price history."
+                    ),
+                    null,
+                    null,
+                    null,
+                    null,
+                    technicalAnalysisResult.getFinalResponse()
+            );
+        } catch (RuntimeException ex) {
+            return failedOutcome(AgentType.TECHNICAL_ANALYSIS, ex);
+        }
     }
 
-    private void executeTechnicalAnalysis(AnalysisRequest request, ExecutionState state) {
-        TechnicalAnalysisResult technicalAnalysisResult = technicalAnalysisAgent.execute(request.ticker());
-        state.technicalAnalysisSnapshot = technicalAnalysisResult.getFinalResponse();
-        state.agentExecutions.add(new AgentExecution(
-                AgentType.TECHNICAL_ANALYSIS,
-                AgentExecutionStatus.COMPLETED,
-                "Technical Analysis Agent calculated SMA, EMA, and RSI from Twelve Data price history."
-        ));
+    private AgentExecutionOutcome failedOutcome(AgentType agentType, Throwable throwable) {
+        Throwable normalizedThrowable = unwrapThrowable(throwable);
+        String normalizedError = normalizeErrorMessage(normalizedThrowable);
+        return new AgentExecutionOutcome(
+                new AgentExecution(
+                        agentType,
+                        AgentExecutionStatus.FAILED,
+                        "%s failed: %s".formatted(agentLabel(agentType), normalizedError)
+                ),
+                "%s failed: %s".formatted(agentType, normalizedError),
+                null,
+                null,
+                null,
+                null
+        );
     }
 
-    private void markNotImplemented(AgentType agentType, ExecutionState state) {
-        state.agentExecutions.add(new AgentExecution(
-                agentType,
-                AgentExecutionStatus.NOT_IMPLEMENTED,
-                "This agent is part of the orchestration plan but has not been implemented yet."
-        ));
-        state.limitations.add(agentType + " is not implemented yet.");
+    private void mergeOutcome(ExecutionState state, AgentExecutionOutcome outcome) {
+        state.agentExecutions.add(outcome.execution);
+        if (outcome.limitations != null) {
+            state.limitations.add(outcome.limitations);
+        }
+        if (outcome.marketSnapshot != null) {
+            state.marketSnapshot = outcome.marketSnapshot;
+        }
+        if (outcome.fundamentalsSnapshot != null) {
+            state.fundamentalsSnapshot = outcome.fundamentalsSnapshot;
+        }
+        if (outcome.newsSnapshot != null) {
+            state.newsSnapshot = outcome.newsSnapshot;
+        }
+        if (outcome.technicalAnalysisSnapshot != null) {
+            state.technicalAnalysisSnapshot = outcome.technicalAnalysisSnapshot;
+        }
     }
 
     private String buildAnswer(AnalysisRequest request, ExecutionPlan executionPlan, ExecutionState state) {
@@ -249,7 +356,15 @@ public class AgentOrchestrationService {
         };
     }
 
-    private String normalizeErrorMessage(RuntimeException ex) {
+    private Throwable unwrapThrowable(Throwable throwable) {
+        Throwable current = throwable;
+        while (current instanceof CompletionException && current.getCause() != null) {
+            current = current.getCause();
+        }
+        return current;
+    }
+
+    private String normalizeErrorMessage(Throwable ex) {
         String message = ex.getMessage();
         if (message == null || message.isBlank()) {
             return ex.getClass().getSimpleName();
@@ -312,5 +427,48 @@ public class AgentOrchestrationService {
         private FundamentalsSnapshot fundamentalsSnapshot;
         private NewsSnapshot newsSnapshot;
         private TechnicalAnalysisSnapshot technicalAnalysisSnapshot;
+    }
+
+    private static class AgentExecutionOutcome {
+        private final AgentExecution execution;
+        private final String limitations;
+        private final MarketSnapshot marketSnapshot;
+        private final FundamentalsSnapshot fundamentalsSnapshot;
+        private final NewsSnapshot newsSnapshot;
+        private final TechnicalAnalysisSnapshot technicalAnalysisSnapshot;
+
+        private AgentExecutionOutcome(
+                AgentExecution execution,
+                String limitations,
+                MarketSnapshot marketSnapshot,
+                FundamentalsSnapshot fundamentalsSnapshot,
+                NewsSnapshot newsSnapshot,
+                TechnicalAnalysisSnapshot technicalAnalysisSnapshot
+        ) {
+            this.execution = execution;
+            this.limitations = limitations;
+            this.marketSnapshot = marketSnapshot;
+            this.fundamentalsSnapshot = fundamentalsSnapshot;
+            this.newsSnapshot = newsSnapshot;
+            this.technicalAnalysisSnapshot = technicalAnalysisSnapshot;
+        }
+
+        private static AgentExecutionOutcome completed(
+                AgentExecution execution,
+                String limitation,
+                MarketSnapshot marketSnapshot,
+                FundamentalsSnapshot fundamentalsSnapshot,
+                NewsSnapshot newsSnapshot,
+                TechnicalAnalysisSnapshot technicalAnalysisSnapshot
+        ) {
+            return new AgentExecutionOutcome(
+                    execution,
+                    limitation,
+                    marketSnapshot,
+                    fundamentalsSnapshot,
+                    newsSnapshot,
+                    technicalAnalysisSnapshot
+            );
+        }
     }
 }

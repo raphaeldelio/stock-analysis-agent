@@ -37,11 +37,13 @@ Build a stock-analysis multi-agent orchestration application with Spring AI wher
   - Technical analysis agent with Twelve Data time series and indicator tests
   - LLM-backed synthesis agent with deterministic fallback for test/no-model runs
   - Dynamic orchestration dispatch with per-agent failure handling
+  - Safe parallel fan-out for independent agents via `CompletableFuture`
 - In progress
-  - True orchestration milestone
+  - Hardening milestone
 - Next up
-  - refactor orchestration to feel less pipeline-like now that all specialized agents are real
-  - add safer partial-failure handling before parallel fan-out
+  - add timeouts and retry boundaries around external providers
+  - add caching for market, SEC, and Tavily lookups
+  - improve facilitator guidance for degraded execution and shared workshop traffic
 
 ## Milestones
 
@@ -50,9 +52,9 @@ Build a stock-analysis multi-agent orchestration application with Spring AI wher
 | Foundation | Complete | The analysis API exists, core orchestration types are defined, the test profile runs without model credentials, and the baseline test suite passes. |
 | Thin Vertical Slice | Complete | `Coordinator -> MarketDataAgent -> SynthesisAgent` works end to end with mock data, the coordinator routes through a single LLM-backed concrete class, and tests pass with a simple routing override for local verification. |
 | Real Data Integration | Complete | Twelve Data replaces the mock market provider, SEC-backed fundamentals data objects are introduced, and the real-data slices have both automated and manual verification steps. |
-| True Orchestration | Planned | The coordinator selects agents dynamically, execution no longer looks like a fixed pipeline, partial failure handling is supported, safe parallel fan-out is introduced, and routing plus degraded execution paths are covered by tests. |
+| True Orchestration | Complete | The coordinator selects agents dynamically, execution no longer looks like a fixed pipeline, partial failure handling is supported, safe parallel fan-out is introduced, and routing plus degraded execution paths are covered by tests. |
 | Additional Agents | Complete | Fundamentals, news, and technical analysis agents are implemented against stable data shapes and each new agent adds its own smoke-test scenario. |
-| Hardening | Planned | Timeouts, retries, caching, stronger tests, and workshop checkpoints are in place, with a regression suite that validates the main workshop flows. |
+| Hardening | In Progress | Timeouts, retries, caching, stronger tests, and workshop checkpoints are in place, with a regression suite that validates the main workshop flows. |
 | Workshop Polish | Planned | Learner instructions, checkpoints, and facilitator notes are aligned with the final implementation, and each milestone has a clear validation recipe. |
 
 ## Milestone Testability Rule
@@ -76,6 +78,7 @@ If a milestone cannot be verified through all three, it is not done.
 - the CLI output is intentionally sectioned for teaching, but it should not be mistaken for a permanently linear workflow.
 - `agent/AgentOrchestrationService` coordinates the current slice.
 - `agent/AgentOrchestrationService` now dispatches selected agents dynamically instead of hardcoding one growing execution chain.
+- `agent/AgentOrchestrationService` now fans out independent selected agents with `CompletableFuture` on a Spring-managed executor and merges results back in plan order for stable CLI/API output.
 - `agent/coordinatoragent/CoordinatorAgent` owns coordinator execution, plan normalization, and request normalization.
 - `agent/coordinatoragent/CoordinatorRoutingAgent` is a concrete class that uses Spring AI structured output plus lightweight chat memory for runtime routing and clarification.
 - the project now uses the Spring AI OpenAI starter for local model access.
@@ -97,6 +100,7 @@ If a milestone cannot be verified through all three, it is not done.
 - `agent/synthesisagent/SynthesisAgent` is now a true LLM-backed agent at runtime and consumes only structured outputs from the specialized agents.
 - in test and no-model runs, `agent/synthesisagent/SynthesisAgent` falls back to a deterministic synthesis path so the workshop remains runnable without credentials.
 - selected agents can now fail independently without crashing the entire request; failures are surfaced in agent execution status and limitations.
+- the current runtime parallelizes independent specialized agents but still lets dependent work, such as fundamentals with market-price context, wait for the data it needs.
 - Integration and orchestration tests are green and provide a simple routing override for repeatable verification.
 
 ## Package Shape
@@ -115,8 +119,8 @@ This keeps the workshop centered on agents rather than on a generic `analysis` p
 
 ## Immediate Backlog
 
-1. Refine the coordinator prompt and routing decision shape now that market, fundamentals, news, technical analysis, and synthesis are all real.
-2. Add safe parallel fan-out for independent agents.
+1. Add timeouts and retry boundaries around Twelve Data, SEC, and Tavily calls.
+2. Add caching for repeated market, fundamentals, and news requests.
 3. Improve facilitator guidance and smoke tests for degraded execution scenarios.
 
 ## Deferred Scope

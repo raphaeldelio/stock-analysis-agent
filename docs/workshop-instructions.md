@@ -380,6 +380,53 @@ Expected result:
 
 This slice is the real shift from “workflow demo” to orchestration. The coordinator already chose the route earlier; here the runtime starts to honor that plan dynamically and tolerate partial failure without hiding what happened.
 
+## Part 8: Parallel Fan-Out
+
+### Objective
+
+Let independent specialized agents execute concurrently with `CompletableFuture` while keeping the orchestration code explicit and readable.
+
+### What Learners Build
+
+1. A Spring-managed executor dedicated to agent work.
+2. `CompletableFuture`-based fan-out inside `AgentOrchestrationService`.
+3. A small rule for dependency handling so fundamentals can still wait for market-price context when market data is part of the plan.
+4. Stable result merging so CLI and API output remain predictable even though execution is concurrent underneath.
+5. A concurrency-focused orchestration test that proves selected agents really start in parallel.
+
+### Acceptance Criteria
+
+- independent agents execute concurrently rather than sequentially
+- fundamentals still receives market-price context when market data is selected
+- one failing future still degrades into a per-agent failure instead of crashing the whole run
+- CLI and API output remain stable and readable
+- tests cover real parallel fan-out behavior
+
+### Automated Validation
+
+- run `./gradlew test`
+- verify there is a dedicated orchestration test proving `MARKET_DATA`, `NEWS`, and `TECHNICAL_ANALYSIS` can start together
+
+### Manual Smoke Test
+
+```bash
+./gradlew bootRun
+```
+
+Then enter:
+
+- `Request: Give me a full view on Apple with fundamentals, news, and technical analysis`
+
+Expected result:
+
+- the same broad multi-agent flow still works
+- the CLI output remains stable and ordered for readability
+- the implementation underneath now uses parallel fan-out for independent agents
+
+### Teaching Point
+
+This slice is a good example of “Spring-friendly, not framework-heavy” orchestration. We keep normal Spring services and explicit Java control flow, but use a Spring-managed executor plus `CompletableFuture` to parallelize the work that does not need to run sequentially.
+
 ## Authoring Rule
 
 Whenever a new workshop slice lands in the codebase, update this file with:
