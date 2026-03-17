@@ -42,6 +42,8 @@ STOCK_ANALYSIS_MARKET_DATA_PROVIDER=mock
 
 - `docs/workshop-plan.md` is the source of truth for milestone status, next steps, and deferred scope
 - `docs/workshop-instructions.md` holds the learner-facing workshop instructions that evolve with the implementation
+- `docs/workshop-checkpoints.md` maps the workshop into explicit checkpoints with learner scope and validation steps
+- `docs/facilitator-notes.md` captures local setup, live-demo guidance, and common failure modes
 
 ## Local Config
 
@@ -178,6 +180,32 @@ If you want to validate the workshop slice without model credentials, use:
 
 ```bash
 ./gradlew test
+```
+
+## Java 25 And Netty On macOS
+
+This project uses Reactor Netty transitively through Spring AI's WebClient support. On macOS with Java 25, you may otherwise see:
+
+- a restricted native-access warning from Netty
+- a fallback warning about `MacOSDnsServerAddressStreamProvider`
+
+The Gradle build already configures the required JVM flag for `bootRun` and `test`:
+
+```bash
+--enable-native-access=ALL-UNNAMED
+```
+
+If you run the app outside Gradle, add the same JVM argument yourself.
+
+For IntelliJ IDEA:
+
+- open the Run/Debug configuration for the app
+- add `--enable-native-access=ALL-UNNAMED` in `VM options`
+
+For a packaged jar:
+
+```bash
+java --enable-native-access=ALL-UNNAMED -jar build/libs/stock-analysis-agent-0.0.1-SNAPSHOT.jar
 ```
 
 If you want to run the HTTP API instead of the CLI, disable CLI mode explicitly:

@@ -40,10 +40,11 @@ Build a stock-analysis multi-agent orchestration application with Spring AI wher
   - Safe parallel fan-out for independent agents via `CompletableFuture`
 - In progress
   - Hardening milestone
+  - Workshop polish milestone
 - Next up
   - add timeouts and retry boundaries around external providers
   - add caching for market, SEC, and Tavily lookups
-  - improve facilitator guidance for degraded execution and shared workshop traffic
+  - add workshop checkpoint tags or branches when the teaching path is stable
 
 ## Milestones
 
@@ -55,7 +56,7 @@ Build a stock-analysis multi-agent orchestration application with Spring AI wher
 | True Orchestration | Complete | The coordinator selects agents dynamically, execution no longer looks like a fixed pipeline, partial failure handling is supported, safe parallel fan-out is introduced, and routing plus degraded execution paths are covered by tests. |
 | Additional Agents | Complete | Fundamentals, news, and technical analysis agents are implemented against stable data shapes and each new agent adds its own smoke-test scenario. |
 | Hardening | In Progress | Timeouts, retries, caching, stronger tests, and workshop checkpoints are in place, with a regression suite that validates the main workshop flows. |
-| Workshop Polish | Planned | Learner instructions, checkpoints, and facilitator notes are aligned with the final implementation, and each milestone has a clear validation recipe. |
+| Workshop Polish | In Progress | Learner instructions, checkpoints, and facilitator notes are aligned with the final implementation, and each milestone has a clear validation recipe. |
 
 ## Milestone Testability Rule
 
@@ -102,6 +103,7 @@ If a milestone cannot be verified through all three, it is not done.
 - selected agents can now fail independently without crashing the entire request; failures are surfaced in agent execution status and limitations.
 - the current runtime parallelizes independent specialized agents but still lets dependent work, such as fundamentals with market-price context, wait for the data it needs.
 - Integration and orchestration tests are green and provide a simple routing override for repeatable verification.
+- the repository now includes separate learner instructions, checkpoint mapping, and facilitator notes so the teaching path is no longer implicit.
 
 ## Package Shape
 
@@ -121,7 +123,7 @@ This keeps the workshop centered on agents rather than on a generic `analysis` p
 
 1. Add timeouts and retry boundaries around Twelve Data, SEC, and Tavily calls.
 2. Add caching for repeated market, fundamentals, and news requests.
-3. Improve facilitator guidance and smoke tests for degraded execution scenarios.
+3. Add checkpoint tags or branches and facilitator smoke-test scripts.
 
 ## Deferred Scope
 

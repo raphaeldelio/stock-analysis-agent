@@ -4,6 +4,11 @@ Last updated: 2026-03-16
 
 This file is the learner-facing companion to the implementation. As the project evolves, add new workshop parts here so the exercises stay aligned with the actual repository state.
 
+For delivery planning, pair this file with:
+
+- `docs/workshop-checkpoints.md` for checkpoint-by-checkpoint scope and validation
+- `docs/facilitator-notes.md` for setup, demo flow, and troubleshooting guidance
+
 ## Workshop Framing
 
 This workshop teaches orchestration, not autonomous planning.
