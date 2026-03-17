@@ -173,11 +173,7 @@ public class AgentOrchestrationService {
         try {
             MarketDataResult marketDataResult = marketDataAgent.execute(request.ticker(), request.question());
             return AgentExecutionOutcome.completed(
-                    new AgentExecution(
-                            AgentType.MARKET_DATA,
-                            AgentExecutionStatus.COMPLETED,
-                            "Market Data Agent used its market-data tools to fetch a current snapshot."
-                    ),
+                    completedExecution(AgentType.MARKET_DATA),
                     marketDataResult.getFinalResponse(),
                     marketDataResult.getMessage()
             );
@@ -193,13 +189,7 @@ public class AgentOrchestrationService {
                     : fundamentalsAgent.execute(request.ticker(), request.question());
 
             return AgentExecutionOutcome.completed(
-                    new AgentExecution(
-                            AgentType.FUNDAMENTALS,
-                            AgentExecutionStatus.COMPLETED,
-                            marketSnapshot != null
-                                    ? "Fundamentals Agent used its fundamentals tool with market-price context."
-                                    : "Fundamentals Agent used its fundamentals tool to fetch a normalized snapshot."
-                    ),
+                    completedExecution(AgentType.FUNDAMENTALS),
                     fundamentalsResult.getFinalResponse(),
                     fundamentalsResult.getMessage()
             );
@@ -212,11 +202,7 @@ public class AgentOrchestrationService {
         try {
             NewsResult newsResult = newsAgent.execute(request.ticker(), request.question());
             return AgentExecutionOutcome.completed(
-                    new AgentExecution(
-                            AgentType.NEWS,
-                            AgentExecutionStatus.COMPLETED,
-                            "News Agent used its news tool to fetch a hybrid news snapshot."
-                    ),
+                    completedExecution(AgentType.NEWS),
                     newsResult.getFinalResponse(),
                     newsResult.getMessage()
             );
@@ -229,11 +215,7 @@ public class AgentOrchestrationService {
         try {
             TechnicalAnalysisResult technicalAnalysisResult = technicalAnalysisAgent.execute(request.ticker(), request.question());
             return AgentExecutionOutcome.completed(
-                    new AgentExecution(
-                            AgentType.TECHNICAL_ANALYSIS,
-                            AgentExecutionStatus.COMPLETED,
-                            "Technical Analysis Agent used its technical-analysis tool to fetch a normalized snapshot."
-                    ),
+                    completedExecution(AgentType.TECHNICAL_ANALYSIS),
                     technicalAnalysisResult.getFinalResponse(),
                     technicalAnalysisResult.getMessage()
             );
@@ -246,11 +228,7 @@ public class AgentOrchestrationService {
         Throwable normalizedThrowable = unwrapThrowable(throwable);
         String normalizedError = normalizeErrorMessage(normalizedThrowable);
         return AgentExecutionOutcome.failed(
-                new AgentExecution(
-                        agentType,
-                        AgentExecutionStatus.FAILED,
-                        "%s failed: %s".formatted(agentLabel(agentType), normalizedError)
-                ),
+                failedExecution(agentType, normalizedError),
                 "%s failed: %s".formatted(agentType, normalizedError)
         );
     }
@@ -294,11 +272,7 @@ public class AgentOrchestrationService {
             );
 
             if (executionPlan.requiresSynthesis()) {
-                state.agentExecutions.add(new AgentExecution(
-                        AgentType.SYNTHESIS,
-                        AgentExecutionStatus.COMPLETED,
-                        "Synthesis Agent combined the available agent outputs into the final response."
-                ));
+                state.agentExecutions.add(completedExecution(AgentType.SYNTHESIS));
             }
 
             return synthesizedAnswer;
@@ -308,7 +282,7 @@ public class AgentOrchestrationService {
             state.agentExecutions.add(new AgentExecution(
                     AgentType.SYNTHESIS,
                     AgentExecutionStatus.SKIPPED,
-                    "Synthesis was skipped because no specialized agent outputs were available."
+                    "Synthesis skipped."
             ));
         }
 
@@ -331,6 +305,14 @@ public class AgentOrchestrationService {
             case TECHNICAL_ANALYSIS -> "Technical Analysis Agent";
             case SYNTHESIS -> "Synthesis Agent";
         };
+    }
+
+    private AgentExecution completedExecution(AgentType agentType) {
+        return new AgentExecution(agentType, AgentExecutionStatus.COMPLETED, "%s completed.".formatted(agentLabel(agentType)));
+    }
+
+    private AgentExecution failedExecution(AgentType agentType, String error) {
+        return new AgentExecution(agentType, AgentExecutionStatus.FAILED, "%s failed: %s".formatted(agentLabel(agentType), error));
     }
 
     private Throwable unwrapThrowable(Throwable throwable) {

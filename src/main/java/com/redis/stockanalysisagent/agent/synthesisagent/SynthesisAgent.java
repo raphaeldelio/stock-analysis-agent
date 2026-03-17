@@ -19,6 +19,7 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
@@ -187,7 +188,6 @@ public class SynthesisAgent {
     ) {
         String baseAnswer = buildFallbackBaseAnswer(
                 request,
-                executionPlan,
                 marketSnapshot,
                 fundamentalsSnapshot,
                 newsSnapshot,
@@ -218,141 +218,66 @@ public class SynthesisAgent {
 
     private String buildFallbackBaseAnswer(
             AnalysisRequest request,
-            ExecutionPlan executionPlan,
             MarketSnapshot marketSnapshot,
             FundamentalsSnapshot fundamentalsSnapshot,
             NewsSnapshot newsSnapshot,
             TechnicalAnalysisSnapshot technicalAnalysisSnapshot
     ) {
-        if (marketSnapshot != null
-                && fundamentalsSnapshot != null
-                && newsSnapshot != null
-                && hasNews(newsSnapshot)
-                && technicalAnalysisSnapshot != null) {
-            return """
-                    Based on the currently implemented agents, %s is trading at $%s (%s%% vs. previous close).
-                    %s reported revenue of %s with revenue growth of %s and net margin of %s.
-                    Recent news signals include %s.
-                    Technical signals are %s with %s momentum and RSI(14) at %s.
-                    The coordinator selected %s for the question "%s".
-                    """.formatted(
-                    marketSnapshot.symbol(),
-                    marketSnapshot.currentPrice(),
-                    marketSnapshot.percentChange(),
-                    fundamentalsSnapshot.companyName(),
-                    formatMoney(fundamentalsSnapshot.revenue()),
-                    formatPercent(fundamentalsSnapshot.revenueGrowthPercent()),
-                    formatPercent(fundamentalsSnapshot.netMarginPercent()),
-                    newsHighlight(newsSnapshot),
-                    technicalAnalysisSnapshot.trendSignal().toLowerCase(),
-                    technicalAnalysisSnapshot.momentumSignal().toLowerCase(),
-                    technicalAnalysisSnapshot.rsi14(),
-                    executionPlan.selectedAgents(),
-                    request.question()
-            ).replace('\n', ' ').trim();
-        }
-
-        if (marketSnapshot != null && technicalAnalysisSnapshot != null) {
-            return """
-                    Based on the currently implemented agents, %s is trading at $%s (%s%% vs. previous close).
-                    Technical signals are %s with %s momentum and RSI(14) at %s.
-                    The coordinator selected %s for the question "%s".
-                    """.formatted(
-                    marketSnapshot.symbol(),
-                    marketSnapshot.currentPrice(),
-                    marketSnapshot.percentChange(),
-                    technicalAnalysisSnapshot.trendSignal().toLowerCase(),
-                    technicalAnalysisSnapshot.momentumSignal().toLowerCase(),
-                    technicalAnalysisSnapshot.rsi14(),
-                    executionPlan.selectedAgents(),
-                    request.question()
-            ).replace('\n', ' ').trim();
-        }
-
-        if (marketSnapshot != null && fundamentalsSnapshot != null) {
-            return """
-                    Based on the currently implemented agents, %s is trading at $%s (%s%% vs. previous close).
-                    %s reported revenue of %s with revenue growth of %s and a net margin of %s.
-                    The coordinator selected %s for the question "%s".
-                    """.formatted(
-                    marketSnapshot.symbol(),
-                    marketSnapshot.currentPrice(),
-                    marketSnapshot.percentChange(),
-                    fundamentalsSnapshot.companyName(),
-                    formatMoney(fundamentalsSnapshot.revenue()),
-                    formatPercent(fundamentalsSnapshot.revenueGrowthPercent()),
-                    formatPercent(fundamentalsSnapshot.netMarginPercent()),
-                    executionPlan.selectedAgents(),
-                    request.question()
-            ).replace('\n', ' ').trim();
-        }
+        List<String> sections = new ArrayList<>();
 
         if (marketSnapshot != null) {
-            return """
-                    Based on the currently implemented agents, %s is trading at $%s (%s%% vs. previous close).
-                    The coordinator selected %s for the question "%s".
-                    """.formatted(
-                    marketSnapshot.symbol(),
-                    marketSnapshot.currentPrice(),
-                    marketSnapshot.percentChange(),
-                    executionPlan.selectedAgents(),
-                    request.question()
-            ).replace('\n', ' ').trim();
+            sections.add("Market data: %s is trading at $%s, %s%% versus the previous close."
+                    .formatted(
+                            marketSnapshot.symbol(),
+                            marketSnapshot.currentPrice(),
+                            marketSnapshot.percentChange()
+                    ));
         }
 
         if (fundamentalsSnapshot != null) {
-            return """
-                    %s reported revenue of %s and net income of %s.
-                    Revenue growth was %s and net margin was %s.
-                    The coordinator selected %s for the question "%s".
-                    """.formatted(
-                    fundamentalsSnapshot.companyName(),
-                    formatMoney(fundamentalsSnapshot.revenue()),
-                    formatMoney(fundamentalsSnapshot.netIncome()),
-                    formatPercent(fundamentalsSnapshot.revenueGrowthPercent()),
-                    formatPercent(fundamentalsSnapshot.netMarginPercent()),
-                    executionPlan.selectedAgents(),
-                    request.question()
-            ).replace('\n', ' ').trim();
+            sections.add("Fundamentals: %s reported revenue of %s, net income of %s, revenue growth of %s, and net margin of %s."
+                    .formatted(
+                            fundamentalsSnapshot.companyName(),
+                            formatMoney(fundamentalsSnapshot.revenue()),
+                            formatMoney(fundamentalsSnapshot.netIncome()),
+                            formatPercent(fundamentalsSnapshot.revenueGrowthPercent()),
+                            formatPercent(fundamentalsSnapshot.netMarginPercent())
+                    ));
         }
 
-        if (newsSnapshot != null && hasNews(newsSnapshot)) {
-            return """
-                    Recent news signals for %s include %s.
-                    The coordinator selected %s for the question "%s".
-                    """.formatted(
-                    newsSnapshot.companyName(),
-                    newsHighlight(newsSnapshot),
-                    executionPlan.selectedAgents(),
-                    request.question()
-            ).replace('\n', ' ').trim();
+        if (newsSnapshot != null && hasNewsSummary(newsSnapshot)) {
+            sections.add("News: %s".formatted(newsSummary(newsSnapshot)));
         }
 
         if (technicalAnalysisSnapshot != null) {
-            return """
-                    Technical signals for %s are %s with %s momentum.
-                    RSI(14) is %s, with the latest close at $%s versus SMA(20) $%s and EMA(20) $%s.
-                    The coordinator selected %s for the question "%s".
-                    """.formatted(
-                    technicalAnalysisSnapshot.ticker(),
-                    technicalAnalysisSnapshot.trendSignal().toLowerCase(),
-                    technicalAnalysisSnapshot.momentumSignal().toLowerCase(),
-                    technicalAnalysisSnapshot.rsi14(),
-                    technicalAnalysisSnapshot.latestClose(),
-                    technicalAnalysisSnapshot.sma20(),
-                    technicalAnalysisSnapshot.ema20(),
-                    executionPlan.selectedAgents(),
-                    request.question()
-            ).replace('\n', ' ').trim();
+            sections.add("Technicals: trend is %s with %s momentum, RSI(14) is %s, and the latest close is $%s."
+                    .formatted(
+                            technicalAnalysisSnapshot.trendSignal().toLowerCase(),
+                            technicalAnalysisSnapshot.momentumSignal().toLowerCase(),
+                            technicalAnalysisSnapshot.rsi14(),
+                            technicalAnalysisSnapshot.latestClose()
+                    ));
         }
 
-        return """
-                The coordinator selected %s for the question "%s".
-                The required specialized analysis is planned, but the selected agents are not implemented in this slice yet.
-                """.formatted(
-                executionPlan.selectedAgents(),
-                request.question()
-        ).replace('\n', ' ').trim();
+        if (sections.isEmpty()) {
+            return "I could not complete the requested analysis with the currently available agent outputs.";
+        }
+
+        return ("Here is the available analysis for %s. ".formatted(request.ticker())
+                + String.join(" ", sections)).trim();
+    }
+
+    private boolean hasNewsSummary(NewsSnapshot newsSnapshot) {
+        return hasNews(newsSnapshot)
+                || (newsSnapshot.webSummary() != null && !newsSnapshot.webSummary().isBlank());
+    }
+
+    private String newsSummary(NewsSnapshot newsSnapshot) {
+        if (newsSnapshot.webSummary() != null && !newsSnapshot.webSummary().isBlank()) {
+            return newsSnapshot.webSummary().trim();
+        }
+
+        return newsHighlight(newsSnapshot);
     }
 
     private String formatMarketSection(MarketSnapshot marketSnapshot) {

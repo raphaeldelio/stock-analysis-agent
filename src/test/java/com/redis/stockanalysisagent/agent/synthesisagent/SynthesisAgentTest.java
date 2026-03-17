@@ -51,9 +51,10 @@ class SynthesisAgentTest {
                 )
         );
 
-        assertThat(answer).contains("Apple Inc.");
-        assertThat(answer).contains("Recent news signals include");
-        assertThat(answer).contains("Technical signals are bullish");
+        assertThat(answer).contains("Here is the available analysis for AAPL.");
+        assertThat(answer).contains("Fundamentals: Apple Inc.");
+        assertThat(answer).contains("News: Apple faces investor attention around AI strategy.");
+        assertThat(answer).contains("Technicals: trend is bullish");
     }
 
     @Test
