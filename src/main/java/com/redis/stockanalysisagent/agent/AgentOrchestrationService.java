@@ -22,7 +22,6 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.stereotype.Service;
 
-import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.LinkedHashMap;
@@ -62,62 +61,39 @@ public class AgentOrchestrationService {
         this.agentTaskExecutor = agentTaskExecutor;
     }
 
-    public AnalysisResponse processRequest(AnalysisRequest request) {
-        RoutingDecision routingDecision = coordinatorAgent.execute(request);
-        return processRequest(request, routingDecision);
-    }
-
     public AnalysisResponse processRequest(AnalysisRequest request, RoutingDecision routingDecision) {
         if (routingDecision.getFinishReason() != RoutingDecision.FinishReason.COMPLETED) {
-            return new AnalysisResponse(
-                    request.ticker().toUpperCase(),
-                    request.question(),
-                    OffsetDateTime.now(),
-                    null,
-                    List.of(),
-                    null,
-                    null,
-                    null,
-                    null,
-                    resolveCoordinatorMessage(routingDecision),
-                    List.of("Coordinator could not produce an execution plan.")
-            );
+            return unableToPlanResponse(request, routingDecision);
         }
 
         ExecutionPlan executionPlan;
         try {
             executionPlan = coordinatorAgent.createPlan(routingDecision);
         } catch (IllegalStateException ex) {
-            return new AnalysisResponse(
-                    request.ticker().toUpperCase(),
-                    request.question(),
-                    OffsetDateTime.now(),
-                    null,
-                    List.of(),
-                    null,
-                    null,
-                    null,
-                    null,
-                    resolveCoordinatorMessage(routingDecision),
-                    List.of("Coordinator could not produce an execution plan.")
-            );
+            return unableToPlanResponse(request, routingDecision);
         }
 
         ExecutionState state = executeSelectedAgents(request, executionPlan);
         String answer = buildAnswer(request, executionPlan, state);
 
-        return new AnalysisResponse(
-                request.ticker().toUpperCase(),
-                request.question(),
-                OffsetDateTime.now(),
+        return AnalysisResponse.completed(
+                request,
                 executionPlan,
-                List.copyOf(state.agentExecutions),
+                state.agentExecutions,
                 structuredOutput(state, AgentType.MARKET_DATA, MarketSnapshot.class),
                 structuredOutput(state, AgentType.FUNDAMENTALS, FundamentalsSnapshot.class),
                 structuredOutput(state, AgentType.NEWS, NewsSnapshot.class),
                 structuredOutput(state, AgentType.TECHNICAL_ANALYSIS, TechnicalAnalysisSnapshot.class),
                 answer,
-                List.copyOf(state.limitations)
+                state.limitations
+        );
+    }
+
+    private AnalysisResponse unableToPlanResponse(AnalysisRequest request, RoutingDecision routingDecision) {
+        return AnalysisResponse.unableToPlan(
+                request,
+                resolveCoordinatorMessage(routingDecision),
+                List.of("Coordinator could not produce an execution plan.")
         );
     }
 

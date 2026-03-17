@@ -96,26 +96,13 @@ If you ever want to bypass Redis locally, you can set `spring.cache.type=simple`
 
 ## Current Interfaces
 
-`POST /analysis`
+The active user-facing HTTP surface is the browser chat:
 
-```json
-{
-  "ticker": "AAPL",
-  "question": "What is the stock price right now?"
-}
-```
+- `GET /api/chat/context`
+- `POST /api/chat`
+- `DELETE /api/chat/session/{sessionId}`
 
-The REST API remains the stateless, one-shot integration surface.
-
-It returns:
-
-- the execution plan
-- current agent execution status
-- a market snapshot from the configured provider
-- a fundamentals snapshot when fundamentals are selected
-- a news snapshot when news is selected
-- a technical-analysis snapshot when technical analysis is selected
-- a grounded response based on the currently implemented agents
+Internally, the orchestration layer still uses `AnalysisRequest` and `AnalysisResponse` as its normalized input/output contract.
 
 The primary workshop path is now the chat frontend:
 

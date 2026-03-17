@@ -18,7 +18,7 @@ Build a stock-analysis multi-agent orchestration application with Spring AI wher
 
 - Orchestration over fixed workflow.
 - Deterministic provider calls over model-generated facts.
-- keep the REST endpoint, but treat the memory-backed chat frontend as the primary workshop path now.
+- keep the internal orchestration contract stable, but treat the memory-backed chat frontend as the primary workshop path now.
 - Keep integrations swappable, but avoid abstractions before the workshop needs them.
 - Keep the first implementation simple before adding parallelism or advanced runtime behavior.
 - Every milestone must end in a testable workshop slice.
@@ -82,7 +82,7 @@ If a milestone cannot be verified through all three, it is not done.
 
 ## Current Architecture
 
-- `POST /analysis` is the current HTTP entrypoint.
+- `chat/api/ChatController` is the current HTTP entrypoint.
 - `chat/StockAnalysisChatService` is the user-facing chat layer and remains a deterministic shell around the coordinator path.
 - `chat/StockAnalysisChatTools` exposes the bounded stock-analysis entrypoint that delegates into the existing coordinator and orchestration stack.
 - `memory/AmsChatMemoryRepository` adapts Redis Agent Memory Server into Spring AI `ChatMemoryRepository`.

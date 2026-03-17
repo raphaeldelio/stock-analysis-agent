@@ -23,4 +23,50 @@ public record AnalysisResponse(
         String answer,
         List<String> limitations
 ) {
+
+    public static AnalysisResponse unableToPlan(
+            AnalysisRequest request,
+            String answer,
+            List<String> limitations
+    ) {
+        return new AnalysisResponse(
+                request.ticker().toUpperCase(),
+                request.question(),
+                OffsetDateTime.now(),
+                null,
+                List.of(),
+                null,
+                null,
+                null,
+                null,
+                answer,
+                List.copyOf(limitations)
+        );
+    }
+
+    public static AnalysisResponse completed(
+            AnalysisRequest request,
+            ExecutionPlan executionPlan,
+            List<AgentExecution> agentExecutions,
+            MarketSnapshot marketSnapshot,
+            FundamentalsSnapshot fundamentalsSnapshot,
+            NewsSnapshot newsSnapshot,
+            TechnicalAnalysisSnapshot technicalAnalysisSnapshot,
+            String answer,
+            List<String> limitations
+    ) {
+        return new AnalysisResponse(
+                request.ticker().toUpperCase(),
+                request.question(),
+                OffsetDateTime.now(),
+                executionPlan,
+                List.copyOf(agentExecutions),
+                marketSnapshot,
+                fundamentalsSnapshot,
+                newsSnapshot,
+                technicalAnalysisSnapshot,
+                answer,
+                List.copyOf(limitations)
+        );
+    }
 }

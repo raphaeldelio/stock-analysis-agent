@@ -26,11 +26,11 @@ Learners should leave understanding how to:
 
 ### Objective
 
-Build the first end-to-end slice of the application with a REST endpoint, a coordinator that can clarify missing information, one implemented agent, and a synthesis step.
+Build the first end-to-end slice of the application with a browser chat entrypoint, a coordinator that can clarify missing information, one implemented agent, and a synthesis step.
 
 ### What Learners Build
 
-1. A `POST /analysis` endpoint that accepts a ticker and a question.
+1. A normalized request/response contract for orchestration input and output.
 2. Shared orchestration types such as `AgentType`, `ExecutionPlan`, and `AgentExecution`.
 3. A `CoordinatorAgent` that delegates routing to a concrete LLM-backed `CoordinatorRoutingAgent`.
 4. A structured coordinator result that can return `COMPLETED`, `NEEDS_MORE_INPUT`, `OUT_OF_SCOPE`, or `CANNOT_PROCEED`.
@@ -51,7 +51,7 @@ Build the first end-to-end slice of the application with a REST endpoint, a coor
 - A simple price question can route to only `MARKET_DATA`.
 - A broader question can plan additional agents plus synthesis.
 - The response returns the execution plan and current agent status.
-- Tests cover coordinator routing and the API happy path.
+- Tests cover coordinator routing and the orchestration happy path.
 
 ### How Learners Validate Part 1
 
@@ -82,17 +82,6 @@ Recommended local setup:
 - create `application-local.properties` from `application-local.properties.example`
 - put your OpenAI key, Twelve Data key, and SEC user-agent there
 - run `./gradlew bootRun`
-
-Example request:
-
-```bash
-curl -X POST http://localhost:8080/analysis \
-  -H "Content-Type: application/json" \
-  -d '{
-    "ticker": "AAPL",
-    "question": "What is the stock price right now?"
-  }'
-```
 
 Expected shape:
 
@@ -191,7 +180,7 @@ Introduce a fundamentals path based on SEC EDGAR / XBRL data and plug it into th
 - the fundamentals path works without changing the coordinator contract
 - the fundamentals agent executes when the coordinator selects `FUNDAMENTALS`
 - the final response includes a fundamentals snapshot when available
-- tests cover SEC normalization and the API happy path for fundamentals
+- tests cover SEC normalization and the integration happy path for fundamentals
 
 ### Manual Smoke Test
 
@@ -236,7 +225,7 @@ Introduce a hybrid news path that keeps official company-event signals while als
 - the coordinator can execute `NEWS` without changing its contract
 - the response includes a news snapshot when available
 - a news-only question can return a direct answer
-- tests cover SEC filing normalization, Tavily result normalization, and the API happy path for news
+- tests cover SEC filing normalization, Tavily result normalization, and the integration happy path for news
 
 ### Manual Smoke Test
 
@@ -284,7 +273,7 @@ Introduce a deterministic technical-analysis path that computes indicators in Ja
 - the coordinator can execute `TECHNICAL_ANALYSIS` without changing its contract
 - the response includes a technical-analysis snapshot when available
 - a technical-only question can return a direct answer
-- tests cover indicator normalization and the API happy path for technical analysis
+- tests cover indicator normalization and the integration happy path for technical analysis
 
 ### Manual Smoke Test
 
