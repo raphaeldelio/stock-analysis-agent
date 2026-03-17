@@ -1,8 +1,10 @@
 package com.redis.stockanalysisagent.marketdata.twelvedata;
 
 import com.redis.stockanalysisagent.agent.marketdataagent.MarketSnapshot;
+import com.redis.stockanalysisagent.cache.CacheNames;
 import com.redis.stockanalysisagent.cache.ExternalDataCache;
 import org.junit.jupiter.api.Test;
+import org.springframework.cache.concurrent.ConcurrentMapCache;
 import org.springframework.cache.concurrent.ConcurrentMapCacheManager;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
@@ -10,6 +12,7 @@ import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
 import java.net.URI;
+import java.util.Map;
 import java.time.OffsetDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -125,6 +128,37 @@ class TwelveDataMarketDataProviderTest {
 
         assertThat(second).isEqualTo(first);
         server.verify();
+    }
+
+    @Test
+    void normalizesCachedMapPayloadIntoMarketSnapshot() {
+        ConcurrentMapCacheManager cacheManager = new ConcurrentMapCacheManager();
+        ConcurrentMapCache cache = (ConcurrentMapCache) cacheManager.getCache(CacheNames.MARKET_DATA_QUOTES);
+        cache.put("DUOL", Map.of(
+                "symbol", "DUOL",
+                "currentPrice", "347.22",
+                "previousClose", "340.00",
+                "absoluteChange", "7.22",
+                "percentChange", "2.12",
+                "asOf", "2026-03-17T14:00:00Z",
+                "source", "twelve-data"
+        ));
+
+        TwelveDataMarketDataProvider provider = new TwelveDataMarketDataProvider(
+                RestClient.builder(),
+                properties("demo"),
+                new ExternalDataCache(cacheManager)
+        );
+
+        MarketSnapshot snapshot = provider.fetchSnapshot("DUOL");
+
+        assertThat(snapshot.symbol()).isEqualTo("DUOL");
+        assertThat(snapshot.currentPrice()).hasToString("347.22");
+        assertThat(snapshot.previousClose()).hasToString("340.00");
+        assertThat(snapshot.absoluteChange()).hasToString("7.22");
+        assertThat(snapshot.percentChange()).hasToString("2.12");
+        assertThat(snapshot.asOf()).isEqualTo(OffsetDateTime.parse("2026-03-17T14:00:00Z"));
+        assertThat(snapshot.source()).isEqualTo("twelve-data");
     }
 
     private TwelveDataProperties properties(String apiKey) {

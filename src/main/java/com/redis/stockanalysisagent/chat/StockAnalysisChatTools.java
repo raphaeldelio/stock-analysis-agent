@@ -5,6 +5,7 @@ import com.redis.stockanalysisagent.agent.coordinatoragent.CoordinatorAgent;
 import com.redis.stockanalysisagent.agent.coordinatoragent.RoutingDecision;
 import com.redis.stockanalysisagent.api.AnalysisRequest;
 import com.redis.stockanalysisagent.api.AnalysisResponse;
+import com.redis.stockanalysisagent.semanticcache.SemanticAnalysisCache;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
@@ -14,13 +15,16 @@ public class StockAnalysisChatTools {
 
     private final CoordinatorAgent coordinatorAgent;
     private final AgentOrchestrationService agentOrchestrationService;
+    private final SemanticAnalysisCache semanticAnalysisCache;
 
     public StockAnalysisChatTools(
             CoordinatorAgent coordinatorAgent,
-            AgentOrchestrationService agentOrchestrationService
+            AgentOrchestrationService agentOrchestrationService,
+            SemanticAnalysisCache semanticAnalysisCache
     ) {
         this.coordinatorAgent = coordinatorAgent;
         this.agentOrchestrationService = agentOrchestrationService;
+        this.semanticAnalysisCache = semanticAnalysisCache;
     }
 
     @Tool(description = "Run the stock-analysis orchestration for a user's question. Use this for market, fundamentals, news, technical, or combined stock-analysis requests. The tool may return a clarification question if the request is incomplete.")
@@ -28,6 +32,11 @@ public class StockAnalysisChatTools {
             @ToolParam(description = "The user's stock-analysis request in plain English, including any ticker or company reference resolved from conversation context.")
             String request
     ) {
+        java.util.Optional<String> cachedResponse = semanticAnalysisCache.findAnswer(request);
+        if (cachedResponse.isPresent()) {
+            return cachedResponse.get();
+        }
+
         RoutingDecision routingDecision = coordinatorAgent.execute(request);
 
         if (routingDecision.getFinishReason() == RoutingDecision.FinishReason.NEEDS_MORE_INPUT) {
@@ -40,7 +49,11 @@ public class StockAnalysisChatTools {
 
         AnalysisRequest analysisRequest = coordinatorAgent.toAnalysisRequest(routingDecision);
         AnalysisResponse response = agentOrchestrationService.processRequest(analysisRequest, routingDecision);
-        return renderAnalysis(response);
+        String renderedResponse = renderAnalysis(response);
+        if (response.limitations().isEmpty()) {
+            semanticAnalysisCache.store(request, renderedResponse);
+        }
+        return renderedResponse;
     }
 
     private String resolveCoordinatorMessage(RoutingDecision routingDecision) {

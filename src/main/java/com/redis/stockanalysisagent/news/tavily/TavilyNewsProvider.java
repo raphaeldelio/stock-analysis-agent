@@ -3,6 +3,7 @@ package com.redis.stockanalysisagent.news.tavily;
 import com.redis.stockanalysisagent.agent.newsagent.NewsItem;
 import com.redis.stockanalysisagent.cache.CacheNames;
 import com.redis.stockanalysisagent.cache.ExternalDataCache;
+import com.redis.stockanalysisagent.cache.RedisCacheValueSupport;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
@@ -44,7 +45,7 @@ public class TavilyNewsProvider {
                 properties.getMaxResults()
         );
 
-        return externalDataCache.getOrLoad(
+        Object cachedPayload = externalDataCache.getOrLoad(
                 CacheNames.TAVILY_NEWS_SEARCH,
                 cacheKey,
                 () -> {
@@ -72,6 +73,12 @@ public class TavilyNewsProvider {
 
                     return new TavilyNewsSearchResult(items, optionalText(response, "answer", null));
                 }
+        );
+
+        return RedisCacheValueSupport.normalize(
+                cachedPayload,
+                TavilyNewsSearchResult.class,
+                "Cached Tavily news search result for ticker " + ticker.toUpperCase()
         );
     }
 

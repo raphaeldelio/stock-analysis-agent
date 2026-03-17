@@ -18,9 +18,12 @@ spring:
       chat:
         options:
           model: gpt-4o
+      embedding:
+        options:
+          model: text-embedding-3-small
     model:
       chat: openai
-      embedding: none
+      embedding: openai
       image: none
       moderation: none
       audio:
@@ -52,6 +55,13 @@ stock-analysis:
     data-base-url: https://data.sec.gov
     ticker-file-url: https://www.sec.gov/files/company_tickers.json
     user-agent: ${SEC_USER_AGENT:stock-analysis-agent-workshop workshop@example.com}
+  semantic-cache:
+    enabled: ${SEMANTIC_CACHE_ENABLED:true}
+    distance-threshold: 0.12
+    ttl-seconds: 300
+    name: stock-analysis-semantic-cache
+    embedding-model-name: ${spring.ai.openai.embedding.options.model:text-embedding-3-small}
+    embedding-dimensions: 1536
 
 agent-memory:
   server:

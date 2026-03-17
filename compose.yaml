@@ -29,7 +29,7 @@ services:
       start_period: 10s
 
   redis:
-    image: redis
+    image: redis/redis-stack-server:latest
     container_name: stock-analysis-agent-redis
     ports:
       - "6379:6379"

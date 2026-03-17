@@ -3,6 +3,7 @@ package com.redis.stockanalysisagent.technicalanalysis.twelvedata;
 import com.redis.stockanalysisagent.agent.technicalanalysisagent.TechnicalAnalysisSnapshot;
 import com.redis.stockanalysisagent.cache.CacheNames;
 import com.redis.stockanalysisagent.cache.ExternalDataCache;
+import com.redis.stockanalysisagent.cache.RedisCacheValueSupport;
 import com.redis.stockanalysisagent.marketdata.twelvedata.TwelveDataProperties;
 import com.redis.stockanalysisagent.technicalanalysis.TechnicalAnalysisProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -65,7 +66,7 @@ public class TwelveDataTechnicalAnalysisProvider implements TechnicalAnalysisPro
                 technicalAnalysisProperties.getRsiPeriod()
         );
 
-        return externalDataCache.getOrLoad(
+        Object cachedPayload = externalDataCache.getOrLoad(
                 CacheNames.TECHNICAL_ANALYSIS_SNAPSHOTS,
                 cacheKey,
                 () -> {
@@ -128,6 +129,12 @@ public class TwelveDataTechnicalAnalysisProvider implements TechnicalAnalysisPro
                             "twelve-data"
                     );
                 }
+        );
+
+        return RedisCacheValueSupport.normalize(
+                cachedPayload,
+                TechnicalAnalysisSnapshot.class,
+                "Cached technical-analysis snapshot for ticker " + ticker.toUpperCase()
         );
     }
 

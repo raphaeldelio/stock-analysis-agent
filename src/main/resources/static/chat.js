@@ -1,0 +1,365 @@
+(function () {
+    const sessionStorageKey = "stock-analysis-chat:session-id";
+
+    const state = {
+        loading: false,
+        messages: [],
+        sessionId: null
+    };
+
+    const elements = {
+        questionInput: document.getElementById("question-input"),
+        messages: document.getElementById("messages"),
+        composer: document.getElementById("composer"),
+        sendButton: document.getElementById("send-button"),
+        clearButton: document.getElementById("clear-chat-button"),
+        statusPill: document.getElementById("status-pill"),
+        emptyStateTemplate: document.getElementById("empty-state-template")
+    };
+
+    initialize();
+
+    function initialize() {
+        state.sessionId = hydrateSessionId();
+        renderMessages();
+        autoResizeTextarea();
+
+        elements.composer.addEventListener("submit", onSubmit);
+        elements.clearButton.addEventListener("click", clearChat);
+        elements.questionInput.addEventListener("input", autoResizeTextarea);
+        elements.questionInput.addEventListener("keydown", onComposerKeydown);
+        elements.messages.addEventListener("click", onSuggestionClick);
+
+        setStatus("Session ready");
+    }
+
+    function onComposerKeydown(event) {
+        if (event.key === "Enter" && !event.shiftKey) {
+            event.preventDefault();
+            elements.composer.requestSubmit();
+        }
+    }
+
+    function onSuggestionClick(event) {
+        const suggestion = event.target.closest(".suggestion");
+        if (!suggestion) {
+            return;
+        }
+
+        elements.questionInput.value = suggestion.dataset.question || "";
+        autoResizeTextarea();
+        elements.questionInput.focus();
+        setStatus("Prompt loaded");
+    }
+
+    async function onSubmit(event) {
+        event.preventDefault();
+        if (state.loading) {
+            return;
+        }
+
+        const question = elements.questionInput.value.trim();
+        if (!question) {
+            setStatus("Question required", "warning");
+            elements.questionInput.focus();
+            return;
+        }
+
+        appendMessage({
+            role: "user",
+            content: question,
+            timestamp: new Date().toISOString()
+        });
+
+        elements.questionInput.value = "";
+        autoResizeTextarea();
+        setLoading(true);
+
+        try {
+            const response = await requestChat(question);
+            state.sessionId = response.sessionId || state.sessionId;
+            persistSessionId(state.sessionId);
+
+            appendMessage({
+                role: "assistant",
+                content: response.response || "No response returned.",
+                timestamp: new Date().toISOString(),
+                memories: response.retrievedMemories || []
+            });
+            setStatus("Response received");
+        } catch (error) {
+            appendMessage({
+                role: "assistant",
+                variant: "error",
+                content: error.message,
+                timestamp: new Date().toISOString()
+            });
+            setStatus("Request failed", "error");
+        } finally {
+            setLoading(false);
+            elements.questionInput.focus();
+        }
+    }
+
+    async function requestChat(message) {
+        const response = await fetch(new URL("./api/chat", window.location.href), {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                sessionId: state.sessionId,
+                message: message
+            })
+        });
+
+        const contentType = response.headers.get("content-type") || "";
+        const rawBody = await response.text();
+        const body = contentType.includes("application/json") ? safeParseJson(rawBody) : null;
+
+        if (!response.ok) {
+            throw new Error(extractErrorMessage(body, rawBody, response.status));
+        }
+
+        return body || {};
+    }
+
+    async function clearChat() {
+        const currentSessionId = state.sessionId;
+
+        if (currentSessionId) {
+            try {
+                await fetch(new URL("./api/chat/session/" + encodeURIComponent(currentSessionId), window.location.href), {
+                    method: "DELETE"
+                });
+            } catch (error) {
+                // Ignore session clear failures so the local UI can still reset.
+            }
+        }
+
+        state.messages = [];
+        state.sessionId = createSessionId();
+        persistSessionId(state.sessionId);
+        renderMessages();
+        setStatus("Chat cleared");
+        elements.questionInput.focus();
+    }
+
+    function appendMessage(message) {
+        state.messages.push(message);
+        renderMessages();
+    }
+
+    function renderMessages() {
+        elements.messages.replaceChildren();
+
+        if (state.messages.length === 0) {
+            elements.messages.appendChild(buildEmptyState());
+            return;
+        }
+
+        for (const message of state.messages) {
+            elements.messages.appendChild(buildMessage(message));
+        }
+
+        if (state.loading) {
+            elements.messages.appendChild(buildTypingIndicator());
+        }
+
+        scrollMessagesToBottom();
+    }
+
+    function buildEmptyState() {
+        return elements.emptyStateTemplate.content.firstElementChild.cloneNode(true);
+    }
+
+    function buildMessage(message) {
+        const article = document.createElement("article");
+        article.className = ["message", "message--" + message.role, message.variant ? "message--" + message.variant : ""]
+            .filter(Boolean)
+            .join(" ");
+
+        const header = document.createElement("div");
+        header.className = "message__header";
+
+        const role = document.createElement("span");
+        role.className = "message__role";
+        role.textContent = message.role === "user" ? "You" : "Agent";
+
+        const timestamp = document.createElement("span");
+        timestamp.className = "message__timestamp";
+        timestamp.textContent = formatTimestamp(message.timestamp);
+
+        header.append(role, timestamp);
+        article.appendChild(header);
+
+        const content = document.createElement("div");
+        content.className = "message__content";
+        const paragraph = document.createElement("p");
+        paragraph.textContent = message.content;
+        content.appendChild(paragraph);
+        article.appendChild(content);
+
+        if (message.memories && message.memories.length > 0) {
+            article.appendChild(buildMemoryPanel(message.memories));
+        }
+
+        return article;
+    }
+
+    function buildMemoryPanel(memories) {
+        const wrapper = document.createElement("div");
+        wrapper.className = "message__memories";
+
+        const label = document.createElement("div");
+        label.className = "message__memories-label";
+        label.textContent = "Retrieved memories";
+        wrapper.appendChild(label);
+
+        const list = document.createElement("ul");
+        for (const memory of memories) {
+            const item = document.createElement("li");
+            item.textContent = memory;
+            list.appendChild(item);
+        }
+        wrapper.appendChild(list);
+
+        return wrapper;
+    }
+
+    function buildTypingIndicator() {
+        const article = document.createElement("article");
+        article.className = "message message--assistant";
+
+        const header = document.createElement("div");
+        header.className = "message__header";
+
+        const role = document.createElement("span");
+        role.className = "message__role";
+        role.textContent = "Agent";
+
+        const timestamp = document.createElement("span");
+        timestamp.className = "message__timestamp";
+        timestamp.textContent = "Working";
+
+        header.append(role, timestamp);
+        article.appendChild(header);
+
+        const content = document.createElement("div");
+        content.className = "message__content";
+
+        const dots = document.createElement("div");
+        dots.className = "typing-indicator";
+        dots.innerHTML = "<span></span><span></span><span></span>";
+        content.appendChild(dots);
+        article.appendChild(content);
+
+        return article;
+    }
+
+    function setLoading(isLoading) {
+        state.loading = isLoading;
+        elements.sendButton.disabled = isLoading;
+        elements.clearButton.disabled = isLoading;
+        elements.questionInput.disabled = isLoading;
+        elements.sendButton.textContent = isLoading ? "Sending..." : "Send";
+
+        if (isLoading) {
+            setStatus("Analyzing");
+        }
+
+        renderMessages();
+    }
+
+    function setStatus(label, variant) {
+        elements.statusPill.textContent = label;
+        elements.statusPill.classList.toggle("is-warning", variant === "warning");
+        elements.statusPill.classList.toggle("is-error", variant === "error");
+    }
+
+    function autoResizeTextarea() {
+        elements.questionInput.style.height = "auto";
+        elements.questionInput.style.height = Math.min(elements.questionInput.scrollHeight, 224) + "px";
+    }
+
+    function scrollMessagesToBottom() {
+        window.requestAnimationFrame(() => {
+            elements.messages.scrollTop = elements.messages.scrollHeight;
+        });
+    }
+
+    function extractErrorMessage(body, rawBody, status) {
+        if (body && typeof body === "object") {
+            if (typeof body.detail === "string" && body.detail.trim()) {
+                return body.detail.trim();
+            }
+            if (typeof body.message === "string" && body.message.trim()) {
+                return body.message.trim();
+            }
+            if (typeof body.title === "string" && body.title.trim()) {
+                return body.title.trim();
+            }
+        }
+
+        if (rawBody && rawBody.trim()) {
+            return rawBody.trim();
+        }
+
+        return "Request failed with HTTP " + status + ".";
+    }
+
+    function formatTimestamp(value) {
+        const parsed = new Date(value);
+        if (Number.isNaN(parsed.getTime())) {
+            return "";
+        }
+
+        return new Intl.DateTimeFormat(undefined, {
+            hour: "numeric",
+            minute: "2-digit"
+        }).format(parsed);
+    }
+
+    function safeParseJson(rawBody) {
+        if (!rawBody) {
+            return null;
+        }
+
+        try {
+            return JSON.parse(rawBody);
+        } catch (error) {
+            return null;
+        }
+    }
+
+    function hydrateSessionId() {
+        try {
+            const savedSessionId = window.localStorage.getItem(sessionStorageKey);
+            if (savedSessionId) {
+                return savedSessionId;
+            }
+        } catch (error) {
+            // Ignore storage access failures.
+        }
+
+        const sessionId = createSessionId();
+        persistSessionId(sessionId);
+        return sessionId;
+    }
+
+    function persistSessionId(sessionId) {
+        try {
+            window.localStorage.setItem(sessionStorageKey, sessionId);
+        } catch (error) {
+            // Ignore storage access failures.
+        }
+    }
+
+    function createSessionId() {
+        if (window.crypto && typeof window.crypto.randomUUID === "function") {
+            return window.crypto.randomUUID();
+        }
+
+        return "session-" + Date.now();
+    }
+}());

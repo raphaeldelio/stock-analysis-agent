@@ -3,6 +3,7 @@ package com.redis.stockanalysisagent.marketdata.twelvedata;
 import com.redis.stockanalysisagent.agent.marketdataagent.MarketSnapshot;
 import com.redis.stockanalysisagent.cache.CacheNames;
 import com.redis.stockanalysisagent.cache.ExternalDataCache;
+import com.redis.stockanalysisagent.cache.RedisCacheValueSupport;
 import com.redis.stockanalysisagent.marketdata.MarketDataProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -49,7 +50,7 @@ public class TwelveDataMarketDataProvider implements MarketDataProvider {
                     """.stripIndent().trim());
         }
 
-        return externalDataCache.getOrLoad(
+        Object cachedPayload = externalDataCache.getOrLoad(
                 CacheNames.MARKET_DATA_QUOTES,
                 ticker.toUpperCase(),
                 () -> {
@@ -87,6 +88,12 @@ public class TwelveDataMarketDataProvider implements MarketDataProvider {
                             "twelve-data"
                     );
                 }
+        );
+
+        return RedisCacheValueSupport.normalize(
+                cachedPayload,
+                MarketSnapshot.class,
+                "Cached market snapshot for ticker " + ticker.toUpperCase()
         );
     }
 

@@ -29,6 +29,9 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-webflux")
     implementation("org.springframework.ai:spring-ai-starter-model-openai")
     implementation("com.redis:agent-memory-client-java:0.1.0")
+    //jedis
+    implementation("redis.clients:jedis:7.3.0")
+    implementation("com.redis:redisvl:0.12.2")
     runtimeOnly("io.netty:netty-resolver-dns-native-macos") {
         artifact {
             classifier = "osx-aarch_64"
