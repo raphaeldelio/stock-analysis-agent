@@ -1,6 +1,6 @@
 package com.redis.stockanalysisagent.agent.technicalanalysisagent;
 
-import com.redis.stockanalysisagent.technicalanalysis.TechnicalAnalysisProvider;
+import com.redis.stockanalysisagent.providers.twelvedata.TwelveDataTechnicalAnalysisProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
@@ -13,11 +13,11 @@ import org.springframework.stereotype.Service;
 public class TechnicalAnalysisAgent {
 
     private static final Logger log = LoggerFactory.getLogger(TechnicalAnalysisAgent.class);
-    private final TechnicalAnalysisProvider technicalAnalysisProvider;
+    private final TwelveDataTechnicalAnalysisProvider technicalAnalysisProvider;
     private final ChatClient technicalAnalysisChatClient;
 
     public TechnicalAnalysisAgent(
-            TechnicalAnalysisProvider technicalAnalysisProvider,
+            TwelveDataTechnicalAnalysisProvider technicalAnalysisProvider,
             @Qualifier("technicalAnalysisChatClient") ChatClient technicalAnalysisChatClient
     ) {
         this.technicalAnalysisProvider = technicalAnalysisProvider;

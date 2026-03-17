@@ -2,7 +2,7 @@ package com.redis.stockanalysisagent.agent.tools;
 
 import com.redis.stockanalysisagent.agent.fundamentalsagent.FundamentalsSnapshot;
 import com.redis.stockanalysisagent.agent.marketdataagent.MarketSnapshot;
-import com.redis.stockanalysisagent.fundamentals.FundamentalsProvider;
+import com.redis.stockanalysisagent.providers.sec.SecFundamentalsProvider;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 
@@ -10,11 +10,11 @@ import java.util.Optional;
 
 public class FundamentalsTools {
 
-    private final FundamentalsProvider fundamentalsProvider;
+    private final SecFundamentalsProvider fundamentalsProvider;
     private final Optional<MarketSnapshot> marketSnapshot;
 
     public FundamentalsTools(
-            FundamentalsProvider fundamentalsProvider,
+            SecFundamentalsProvider fundamentalsProvider,
             Optional<MarketSnapshot> marketSnapshot
     ) {
         this.fundamentalsProvider = fundamentalsProvider;

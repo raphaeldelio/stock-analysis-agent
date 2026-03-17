@@ -1,6 +1,6 @@
 package com.redis.stockanalysisagent.agent.marketdataagent;
 
-import com.redis.stockanalysisagent.marketdata.MarketDataProvider;
+import com.redis.stockanalysisagent.providers.twelvedata.TwelveDataMarketDataProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
@@ -13,11 +13,11 @@ import org.springframework.stereotype.Service;
 public class MarketDataAgent {
 
     private static final Logger log = LoggerFactory.getLogger(MarketDataAgent.class);
-    private final MarketDataProvider marketDataProvider;
+    private final TwelveDataMarketDataProvider marketDataProvider;
     private final ChatClient marketDataChatClient;
 
     public MarketDataAgent(
-            MarketDataProvider marketDataProvider,
+            TwelveDataMarketDataProvider marketDataProvider,
             @Qualifier("marketDataChatClient") ChatClient marketDataChatClient
     ) {
         this.marketDataProvider = marketDataProvider;

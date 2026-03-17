@@ -4,7 +4,6 @@ import com.redis.stockanalysisagent.agent.marketdataagent.MarketSnapshot;
 import com.redis.stockanalysisagent.cache.CacheNames;
 import com.redis.stockanalysisagent.cache.ExternalDataCache;
 import com.redis.stockanalysisagent.cache.RedisCacheValueSupport;
-import com.redis.stockanalysisagent.marketdata.MarketDataProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -23,7 +22,7 @@ import java.time.ZoneOffset;
         name = "provider",
         havingValue = "twelve-data"
 )
-public class TwelveDataMarketDataProvider implements MarketDataProvider {
+public class TwelveDataMarketDataProvider {
 
     private final RestClient restClient;
     private final TwelveDataProperties properties;
@@ -41,7 +40,6 @@ public class TwelveDataMarketDataProvider implements MarketDataProvider {
                 .build();
     }
 
-    @Override
     public MarketSnapshot fetchSnapshot(String ticker) {
         if (properties.getApiKey() == null || properties.getApiKey().isBlank()) {
             throw new IllegalStateException("""

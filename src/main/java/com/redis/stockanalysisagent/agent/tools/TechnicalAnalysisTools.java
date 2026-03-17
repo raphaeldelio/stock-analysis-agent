@@ -1,7 +1,7 @@
 package com.redis.stockanalysisagent.agent.tools;
 
 import com.redis.stockanalysisagent.agent.technicalanalysisagent.TechnicalAnalysisSnapshot;
-import com.redis.stockanalysisagent.technicalanalysis.TechnicalAnalysisProvider;
+import com.redis.stockanalysisagent.providers.twelvedata.TwelveDataTechnicalAnalysisProvider;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
@@ -9,9 +9,9 @@ import org.springframework.stereotype.Component;
 @Component
 public class TechnicalAnalysisTools {
 
-    private final TechnicalAnalysisProvider technicalAnalysisProvider;
+    private final TwelveDataTechnicalAnalysisProvider technicalAnalysisProvider;
 
-    public TechnicalAnalysisTools(TechnicalAnalysisProvider technicalAnalysisProvider) {
+    public TechnicalAnalysisTools(TwelveDataTechnicalAnalysisProvider technicalAnalysisProvider) {
         this.technicalAnalysisProvider = technicalAnalysisProvider;
     }
 

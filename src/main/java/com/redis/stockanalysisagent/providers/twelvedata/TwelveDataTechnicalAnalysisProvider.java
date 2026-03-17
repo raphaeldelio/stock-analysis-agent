@@ -4,8 +4,6 @@ import com.redis.stockanalysisagent.agent.technicalanalysisagent.TechnicalAnalys
 import com.redis.stockanalysisagent.cache.CacheNames;
 import com.redis.stockanalysisagent.cache.ExternalDataCache;
 import com.redis.stockanalysisagent.cache.RedisCacheValueSupport;
-import com.redis.stockanalysisagent.providers.twelvedata.TwelveDataProperties;
-import com.redis.stockanalysisagent.technicalanalysis.TechnicalAnalysisProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -27,7 +25,7 @@ import java.util.List;
         havingValue = "twelve-data",
         matchIfMissing = true
 )
-public class TwelveDataTechnicalAnalysisProvider implements TechnicalAnalysisProvider {
+public class TwelveDataTechnicalAnalysisProvider {
 
     private final RestClient restClient;
     private final TwelveDataProperties twelveDataProperties;
@@ -48,7 +46,6 @@ public class TwelveDataTechnicalAnalysisProvider implements TechnicalAnalysisPro
                 .build();
     }
 
-    @Override
     public TechnicalAnalysisSnapshot fetchSnapshot(String ticker) {
         if (twelveDataProperties.getApiKey() == null || twelveDataProperties.getApiKey().isBlank()) {
             throw new IllegalStateException("""

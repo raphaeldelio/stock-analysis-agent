@@ -1,7 +1,7 @@
 package com.redis.stockanalysisagent.agent.tools;
 
 import com.redis.stockanalysisagent.agent.newsagent.NewsSnapshot;
-import com.redis.stockanalysisagent.news.NewsProvider;
+import com.redis.stockanalysisagent.providers.sec.SecNewsProvider;
 import com.redis.stockanalysisagent.providers.tavily.TavilyNewsProvider;
 import com.redis.stockanalysisagent.providers.tavily.TavilyNewsSearchResult;
 import org.springframework.ai.tool.annotation.Tool;
@@ -11,10 +11,10 @@ import org.springframework.stereotype.Component;
 @Component
 public class NewsTools {
 
-    private final NewsProvider officialNewsProvider;
+    private final SecNewsProvider officialNewsProvider;
     private final TavilyNewsProvider tavilyNewsProvider;
 
-    public NewsTools(NewsProvider officialNewsProvider, TavilyNewsProvider tavilyNewsProvider) {
+    public NewsTools(SecNewsProvider officialNewsProvider, TavilyNewsProvider tavilyNewsProvider) {
         this.officialNewsProvider = officialNewsProvider;
         this.tavilyNewsProvider = tavilyNewsProvider;
     }

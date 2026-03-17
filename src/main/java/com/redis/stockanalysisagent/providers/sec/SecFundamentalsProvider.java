@@ -4,10 +4,6 @@ import com.redis.stockanalysisagent.agent.fundamentalsagent.FundamentalsSnapshot
 import com.redis.stockanalysisagent.agent.marketdataagent.MarketSnapshot;
 import com.redis.stockanalysisagent.cache.CacheNames;
 import com.redis.stockanalysisagent.cache.ExternalDataCache;
-import com.redis.stockanalysisagent.fundamentals.FundamentalsProvider;
-import com.redis.stockanalysisagent.providers.sec.SecCompanyReference;
-import com.redis.stockanalysisagent.providers.sec.SecJsonNodeSupport;
-import com.redis.stockanalysisagent.providers.sec.SecTickerLookupService;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -29,7 +25,7 @@ import java.util.Set;
         havingValue = "sec",
         matchIfMissing = true
 )
-public class SecFundamentalsProvider implements FundamentalsProvider {
+public class SecFundamentalsProvider {
 
     private static final Set<String> ANNUAL_FORMS = Set.of("10-K", "10-K/A", "20-F", "20-F/A", "40-F", "40-F/A");
 
@@ -55,7 +51,6 @@ public class SecFundamentalsProvider implements FundamentalsProvider {
                 .build();
     }
 
-    @Override
     public FundamentalsSnapshot fetchSnapshot(String ticker, Optional<MarketSnapshot> marketSnapshot) {
         SecCompanyReference companyReference = secTickerLookupService.resolve(ticker);
         JsonNode companyFacts = fetchCompanyFacts(companyReference);

@@ -1,7 +1,7 @@
 package com.redis.stockanalysisagent.agent.fundamentalsagent;
 
 import com.redis.stockanalysisagent.agent.marketdataagent.MarketSnapshot;
-import com.redis.stockanalysisagent.fundamentals.FundamentalsProvider;
+import com.redis.stockanalysisagent.providers.sec.SecFundamentalsProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
@@ -19,11 +19,11 @@ import java.util.function.Function;
 public class FundamentalsAgent {
 
     private static final Logger log = LoggerFactory.getLogger(FundamentalsAgent.class);
-    private final FundamentalsProvider fundamentalsProvider;
+    private final SecFundamentalsProvider fundamentalsProvider;
     private final Function<Optional<MarketSnapshot>, ChatClient> fundamentalsChatClientFactory;
 
     public FundamentalsAgent(
-            FundamentalsProvider fundamentalsProvider,
+            SecFundamentalsProvider fundamentalsProvider,
             @Qualifier("fundamentalsChatClientFactory")
             Function<Optional<MarketSnapshot>, ChatClient> fundamentalsChatClientFactory
     ) {
