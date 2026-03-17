@@ -25,7 +25,11 @@ public class TechnicalAnalysisResult {
     }
 
     public static TechnicalAnalysisResult completed(TechnicalAnalysisSnapshot finalResponse) {
-        return new TechnicalAnalysisResult(FinishReason.COMPLETED, null, finalResponse);
+        return completed(null, finalResponse);
+    }
+
+    public static TechnicalAnalysisResult completed(String message, TechnicalAnalysisSnapshot finalResponse) {
+        return new TechnicalAnalysisResult(FinishReason.COMPLETED, message, finalResponse);
     }
 
     public static TechnicalAnalysisResult error(String message) {

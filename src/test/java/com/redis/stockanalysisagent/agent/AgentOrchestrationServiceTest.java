@@ -14,6 +14,7 @@ import com.redis.stockanalysisagent.agent.newsagent.NewsSnapshot;
 import com.redis.stockanalysisagent.agent.synthesisagent.SynthesisAgent;
 import com.redis.stockanalysisagent.agent.technicalanalysisagent.TechnicalAnalysisAgent;
 import com.redis.stockanalysisagent.agent.technicalanalysisagent.TechnicalAnalysisSnapshot;
+import com.redis.stockanalysisagent.agent.technicalanalysisagent.TechnicalAnalysisTools;
 import com.redis.stockanalysisagent.api.AnalysisRequest;
 import com.redis.stockanalysisagent.api.AnalysisResponse;
 import com.redis.stockanalysisagent.news.tavily.TavilyNewsProvider;
@@ -132,22 +133,41 @@ class AgentOrchestrationServiceTest {
                             },
                             tavilyStub()
                     ),
-                    new TechnicalAnalysisAgent(ticker -> {
-                        technicalStarted.countDown();
-                        await(releaseAgents);
-                        return new TechnicalAnalysisSnapshot(
-                                ticker.toUpperCase(),
-                                "1day",
-                                OffsetDateTime.parse("2026-03-16T00:00:00Z"),
-                                new BigDecimal("151.00"),
-                                new BigDecimal("149.00"),
-                                new BigDecimal("149.50"),
-                                new BigDecimal("58.00"),
-                                "BULLISH",
-                                "NEUTRAL",
-                                "test-technical"
-                        );
-                    }),
+                    new TechnicalAnalysisAgent(
+                            ticker -> {
+                                technicalStarted.countDown();
+                                await(releaseAgents);
+                                return new TechnicalAnalysisSnapshot(
+                                        ticker.toUpperCase(),
+                                        "1day",
+                                        OffsetDateTime.parse("2026-03-16T00:00:00Z"),
+                                        new BigDecimal("151.00"),
+                                        new BigDecimal("149.00"),
+                                        new BigDecimal("149.50"),
+                                        new BigDecimal("58.00"),
+                                        "BULLISH",
+                                        "NEUTRAL",
+                                        "test-technical"
+                                );
+                            },
+                            new TechnicalAnalysisTools(ticker -> {
+                                technicalStarted.countDown();
+                                await(releaseAgents);
+                                return new TechnicalAnalysisSnapshot(
+                                        ticker.toUpperCase(),
+                                        "1day",
+                                        OffsetDateTime.parse("2026-03-16T00:00:00Z"),
+                                        new BigDecimal("151.00"),
+                                        new BigDecimal("149.00"),
+                                        new BigDecimal("149.50"),
+                                        new BigDecimal("58.00"),
+                                        "BULLISH",
+                                        "NEUTRAL",
+                                        "test-technical"
+                                );
+                            }),
+                            Optional.empty()
+                    ),
                     new SynthesisAgent(Optional.empty()),
                     executor
             );

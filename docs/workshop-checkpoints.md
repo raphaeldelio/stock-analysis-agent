@@ -335,6 +335,42 @@ Manual:
 
 This is the second specialist-agent conversion pattern. The LLM now controls a bounded SEC-backed tool inside `FundamentalsAgent`, but the actual SEC and optional market-context retrieval still stay behind the cache-aware provider layer so we do not lose control over duplication or cost.
 
+## Checkpoint 12: Tool-Backed Technical Analysis Agent
+
+### Learners Implement
+
+- a `TechnicalAnalysisTools` wrapper with a coarse `getTechnicalAnalysisSnapshot` Spring AI tool
+- a tool-aware `ChatClient` inside `TechnicalAnalysisAgent`
+- a technical-analysis prompt that requires tool usage before returning a completed result
+- a deterministic fallback path for test and no-model runs
+- direct-answer wiring so technical-only requests can reuse the technical-analysis agent's own message
+
+### Facilitator Provides
+
+- the cached Twelve Data technical-analysis provider seam from earlier checkpoints
+- the existing indicator calculations in Java
+- the Redis cache layer that already protects upstream provider calls
+
+### Validation
+
+Automated:
+
+- `./gradlew test`
+- confirm there is a dedicated technical-analysis agent test covering the no-model fallback path
+
+Manual:
+
+- run `docker compose up -d redis`
+- run `./gradlew bootRun`
+- enter `What do the technicals look like for Apple?`
+- answer `AAPL` if the coordinator asks for a ticker
+- confirm `Selected agents` contains `TECHNICAL_ANALYSIS`
+- confirm the request returns a direct technical answer
+
+### Teaching Point
+
+This is the third specialist-agent conversion pattern. The LLM now controls a bounded technical-analysis tool inside `TechnicalAnalysisAgent`, but the actual indicator calculations still stay deterministic in Java and the external call still goes through the cache-aware provider layer.
+
 ## Delivery Recommendation
 
 If time is tight, treat these as the must-hit live checkpoints:
@@ -347,3 +383,4 @@ If time is tight, treat these as the must-hit live checkpoints:
 6. Checkpoint 9 for production-minded provider caching
 7. Checkpoint 10 for the first tool-backed specialist agent
 8. Checkpoint 11 for the second tool-backed specialist agent
+9. Checkpoint 12 for the third tool-backed specialist agent

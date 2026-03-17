@@ -605,6 +605,62 @@ Expected result:
 
 This slice extends the same tool-backed pattern from market data into SEC-backed analysis. The LLM can decide how to use the coarse fundamentals tool, but the actual data retrieval still stays behind the cached provider layer, which keeps the system grounded and avoids duplicate upstream calls.
 
+## Part 12: Tool-Backed Technical Analysis Agent
+
+### Objective
+
+Convert `TechnicalAnalysisAgent` into the next specialist agent that uses Spring AI tool-calling while still relying on the cached technical-analysis provider and keeping the actual indicator calculations in Java.
+
+### What Learners Build
+
+1. A `TechnicalAnalysisTools` wrapper with a coarse `getTechnicalAnalysisSnapshot` tool.
+2. A tool-aware `ChatClient` inside `TechnicalAnalysisAgent`.
+3. A technical-analysis prompt that requires tool use before returning a completed result.
+4. A deterministic fallback path when no chat model is configured.
+5. A direct-answer path that can reuse the technical-analysis agent's own message for technical-only requests.
+
+### Acceptance Criteria
+
+- `TechnicalAnalysisAgent` uses Spring AI tools at runtime when a chat model is configured
+- the tool returns normalized technical-analysis data from the existing Twelve Data seam
+- cached technical-analysis lookups still prevent repeated external API hits
+- the technical-only path still works in test and no-model runs
+- tests cover the deterministic fallback path
+
+### Automated Validation
+
+- run `./gradlew test`
+- verify there is a technical-analysis agent test covering the no-model fallback path
+
+### Manual Smoke Test
+
+Make sure Redis is running:
+
+```bash
+docker compose up -d redis
+```
+
+Then run:
+
+```bash
+./gradlew bootRun
+```
+
+Enter:
+
+- `What do the technicals look like for Apple?`
+- then `AAPL` if the coordinator asks for the ticker
+
+Expected result:
+
+- the coordinator routes to `TECHNICAL_ANALYSIS`
+- the technical-analysis agent completes successfully
+- the final answer returns a direct technical assessment
+
+### Teaching Point
+
+This slice extends the same tool-backed pattern into technical analysis without giving the model responsibility for calculations. The LLM can choose the coarse technical-analysis tool, but the indicator math still stays deterministic in Java and the provider call still stays behind the cached seam.
+
 ## Authoring Rule
 
 Whenever a new workshop slice lands in the codebase, update this file with:

@@ -176,6 +176,7 @@ public class AgentOrchestrationService {
                     null,
                     marketDataResult.getMessage(),
                     null,
+                    null,
                     marketDataResult.getFinalResponse(),
                     null,
                     null,
@@ -204,6 +205,7 @@ public class AgentOrchestrationService {
                     null,
                     fundamentalsResult.getMessage(),
                     null,
+                    null,
                     fundamentalsResult.getFinalResponse(),
                     null,
                     null
@@ -227,6 +229,7 @@ public class AgentOrchestrationService {
                     null,
                     null,
                     null,
+                    null,
                     newsResult.getFinalResponse(),
                     null
             );
@@ -237,16 +240,17 @@ public class AgentOrchestrationService {
 
     private AgentExecutionOutcome executeTechnicalAnalysis(AnalysisRequest request) {
         try {
-            TechnicalAnalysisResult technicalAnalysisResult = technicalAnalysisAgent.execute(request.ticker());
+            TechnicalAnalysisResult technicalAnalysisResult = technicalAnalysisAgent.execute(request.ticker(), request.question());
             return AgentExecutionOutcome.completed(
                     new AgentExecution(
                             AgentType.TECHNICAL_ANALYSIS,
                             AgentExecutionStatus.COMPLETED,
-                            "Technical Analysis Agent calculated SMA, EMA, and RSI from Twelve Data price history."
+                            "Technical Analysis Agent used its technical-analysis tool to fetch a normalized snapshot."
                     ),
                     null,
                     null,
                     null,
+                    technicalAnalysisResult.getMessage(),
                     null,
                     null,
                     null,
@@ -267,6 +271,7 @@ public class AgentOrchestrationService {
                         "%s failed: %s".formatted(agentLabel(agentType), normalizedError)
                 ),
                 "%s failed: %s".formatted(agentType, normalizedError),
+                null,
                 null,
                 null,
                 null,
@@ -296,6 +301,9 @@ public class AgentOrchestrationService {
         if (outcome.newsSnapshot != null) {
             state.newsSnapshot = outcome.newsSnapshot;
         }
+        if (outcome.technicalDirectAnswer != null && !outcome.technicalDirectAnswer.isBlank()) {
+            state.technicalDirectAnswer = outcome.technicalDirectAnswer;
+        }
         if (outcome.technicalAnalysisSnapshot != null) {
             state.technicalAnalysisSnapshot = outcome.technicalAnalysisSnapshot;
         }
@@ -321,6 +329,9 @@ public class AgentOrchestrationService {
         }
 
         if (shouldUseDirectTechnicalAnswer(executionPlan, state.technicalAnalysisSnapshot)) {
+            if (state.technicalDirectAnswer != null && !state.technicalDirectAnswer.isBlank()) {
+                return state.technicalDirectAnswer;
+            }
             return technicalAnalysisAgent.createDirectAnswer(state.technicalAnalysisSnapshot);
         }
 
@@ -447,6 +458,7 @@ public class AgentOrchestrationService {
         private final List<String> limitations = new ArrayList<>();
         private String marketDirectAnswer;
         private String fundamentalsDirectAnswer;
+        private String technicalDirectAnswer;
         private MarketSnapshot marketSnapshot;
         private FundamentalsSnapshot fundamentalsSnapshot;
         private NewsSnapshot newsSnapshot;
@@ -458,6 +470,7 @@ public class AgentOrchestrationService {
         private final String limitations;
         private final String marketDirectAnswer;
         private final String fundamentalsDirectAnswer;
+        private final String technicalDirectAnswer;
         private final MarketSnapshot marketSnapshot;
         private final FundamentalsSnapshot fundamentalsSnapshot;
         private final NewsSnapshot newsSnapshot;
@@ -468,6 +481,7 @@ public class AgentOrchestrationService {
                 String limitations,
                 String marketDirectAnswer,
                 String fundamentalsDirectAnswer,
+                String technicalDirectAnswer,
                 MarketSnapshot marketSnapshot,
                 FundamentalsSnapshot fundamentalsSnapshot,
                 NewsSnapshot newsSnapshot,
@@ -477,6 +491,7 @@ public class AgentOrchestrationService {
             this.limitations = limitations;
             this.marketDirectAnswer = marketDirectAnswer;
             this.fundamentalsDirectAnswer = fundamentalsDirectAnswer;
+            this.technicalDirectAnswer = technicalDirectAnswer;
             this.marketSnapshot = marketSnapshot;
             this.fundamentalsSnapshot = fundamentalsSnapshot;
             this.newsSnapshot = newsSnapshot;
@@ -488,6 +503,7 @@ public class AgentOrchestrationService {
                 String limitation,
                 String marketDirectAnswer,
                 String fundamentalsDirectAnswer,
+                String technicalDirectAnswer,
                 MarketSnapshot marketSnapshot,
                 FundamentalsSnapshot fundamentalsSnapshot,
                 NewsSnapshot newsSnapshot,
@@ -498,6 +514,7 @@ public class AgentOrchestrationService {
                     limitation,
                     marketDirectAnswer,
                     fundamentalsDirectAnswer,
+                    technicalDirectAnswer,
                     marketSnapshot,
                     fundamentalsSnapshot,
                     newsSnapshot,
