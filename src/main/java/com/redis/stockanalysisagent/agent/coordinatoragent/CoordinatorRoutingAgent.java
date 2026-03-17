@@ -15,17 +15,6 @@ public class CoordinatorRoutingAgent {
         this.coordinatorChatClient = coordinatorChatClient;
     }
 
-    public RoutingDecision route(AnalysisRequest request) {
-        return route("""
-                Ticker: %s
-                Question: %s
-                """.formatted(request.ticker(), request.question()));
-    }
-
-    public RoutingDecision route(String userMessage) {
-        return route(userMessage, org.springframework.ai.chat.memory.ChatMemory.DEFAULT_CONVERSATION_ID);
-    }
-
     public RoutingDecision route(String userMessage, String conversationId) {
         ResponseEntity<ChatResponse, RoutingDecision> response = coordinatorChatClient
                 .prompt()

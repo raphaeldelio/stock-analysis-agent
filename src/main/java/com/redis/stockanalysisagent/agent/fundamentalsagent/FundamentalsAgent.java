@@ -31,16 +31,8 @@ public class FundamentalsAgent {
         this.fundamentalsChatClientFactory = fundamentalsChatClientFactory;
     }
 
-    public FundamentalsResult execute(String ticker) {
-        return execute(ticker, "What are the current fundamentals for %s?".formatted(ticker.toUpperCase()), Optional.empty());
-    }
-
     public FundamentalsResult execute(String ticker, String question) {
         return execute(ticker, question, Optional.empty());
-    }
-
-    public FundamentalsResult execute(String ticker, MarketSnapshot marketSnapshot) {
-        return execute(ticker, "What are the current fundamentals for %s?".formatted(ticker.toUpperCase()), Optional.of(marketSnapshot));
     }
 
     public FundamentalsResult execute(String ticker, String question, MarketSnapshot marketSnapshot) {

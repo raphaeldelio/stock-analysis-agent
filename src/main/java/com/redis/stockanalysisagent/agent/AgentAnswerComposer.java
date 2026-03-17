@@ -95,7 +95,7 @@ class AgentAnswerComposer {
             return null;
         }
 
-        AgentType selectedAgent = executionPlan.selectedAgents().get(0);
+        AgentType selectedAgent = executionPlan.selectedAgents().getFirst();
         return switch (selectedAgent) {
             case MARKET_DATA -> directAnswer(
                     state,

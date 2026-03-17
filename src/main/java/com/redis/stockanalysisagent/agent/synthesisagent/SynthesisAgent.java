@@ -58,7 +58,6 @@ public class SynthesisAgent {
             if (entity == null || entity.finalAnswer() == null || entity.finalAnswer().isBlank()) {
                 return fallbackAnswer(
                         request,
-                        executionPlan,
                         marketSnapshot,
                         fundamentalsSnapshot,
                         newsSnapshot,
@@ -73,7 +72,6 @@ public class SynthesisAgent {
             log.warn("Falling back to deterministic synthesis because the model-backed synthesis failed.", ex);
             return fallbackAnswer(
                     request,
-                    executionPlan,
                     marketSnapshot,
                     fundamentalsSnapshot,
                     newsSnapshot,
@@ -135,7 +133,6 @@ public class SynthesisAgent {
 
     private String fallbackAnswer(
             AnalysisRequest request,
-            ExecutionPlan executionPlan,
             MarketSnapshot marketSnapshot,
             FundamentalsSnapshot fundamentalsSnapshot,
             NewsSnapshot newsSnapshot,

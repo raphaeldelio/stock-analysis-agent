@@ -19,10 +19,6 @@ public class CoordinatorAgent {
         this.coordinatorRoutingAgent = coordinatorRoutingAgent;
     }
 
-    public ExecutionPlan createPlan(AnalysisRequest request) {
-        return createPlan(execute(request));
-    }
-
     public ExecutionPlan createPlan(RoutingDecision routingDecision) {
         RoutingDecision normalizedDecision = normalizeRoutingDecision(routingDecision);
 
@@ -48,14 +44,6 @@ public class CoordinatorAgent {
                 List.copyOf(selectedAgents),
                 requiresSynthesis,
                 normalizedDecision.getReasoning()
-        );
-    }
-
-    public RoutingDecision execute(AnalysisRequest request) {
-        return normalizeRoutingDecision(
-                coordinatorRoutingAgent.route(request),
-                request.ticker(),
-                request.question()
         );
     }
 
