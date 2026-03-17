@@ -26,7 +26,7 @@ public class AmsChatMemoryRepository implements ChatMemoryRepository {
 
     public static final String SEPARATOR = ":";
     private static final int DEFAULT_TTL_SECONDS = 1800;
-    private static final String CONTEXT_MODEL = "gpt-4o";
+    private static final String MEMORY_MODEL = "gpt-4o";
     private static final Logger log = LoggerFactory.getLogger(AmsChatMemoryRepository.class);
 
     private final AgentMemoryService agentMemoryService;
@@ -48,11 +48,6 @@ public class AmsChatMemoryRepository implements ChatMemoryRepository {
         return lastRetrievedMemories;
     }
 
-    public Double getContextPercentage(String conversationId) {
-        WorkingMemoryResponse response = loadWorkingMemory(conversationId, CONTEXT_MODEL);
-        return response != null ? response.getContextPercentageTotalUsed() : null;
-    }
-
     @Override
     public List<String> findConversationIds() {
         return callOrDefault("list memory sessions", agentMemoryService::listSessions, List.of());
@@ -60,7 +55,7 @@ public class AmsChatMemoryRepository implements ChatMemoryRepository {
 
     @Override
     public List<Message> findByConversationId(String conversationId) {
-        WorkingMemoryResponse response = loadWorkingMemory(conversationId, null);
+        WorkingMemoryResponse response = loadWorkingMemory(conversationId);
         if (response == null || response.getMessages() == null) {
             return List.of();
         }
@@ -92,7 +87,7 @@ public class AmsChatMemoryRepository implements ChatMemoryRepository {
                     sessionId,
                     newMessages,
                     userId,
-                    CONTEXT_MODEL
+                    MEMORY_MODEL
             );
 
             if (firstMessage) {
@@ -171,20 +166,20 @@ public class AmsChatMemoryRepository implements ChatMemoryRepository {
                 .build();
     }
 
-    private WorkingMemoryResponse loadWorkingMemory(String conversationId, String modelName) {
+    private WorkingMemoryResponse loadWorkingMemory(String conversationId) {
         return callOrDefault(
                 "load working memory for conversation " + conversationId,
                 () -> agentMemoryService.getWorkingMemory(
                         parseSessionId(conversationId),
                         parseUserId(conversationId),
-                        modelName
+                        null
                 ),
                 null
         );
     }
 
     private List<MemoryMessage> existingMessages(String conversationId) {
-        WorkingMemoryResponse existing = loadWorkingMemory(conversationId, null);
+        WorkingMemoryResponse existing = loadWorkingMemory(conversationId);
         if (existing == null || existing.getMessages() == null) {
             return new ArrayList<>();
         }
@@ -220,7 +215,7 @@ public class AmsChatMemoryRepository implements ChatMemoryRepository {
                 sessionId,
                 withTtl,
                 userId,
-                CONTEXT_MODEL
+                MEMORY_MODEL
         );
     }
 

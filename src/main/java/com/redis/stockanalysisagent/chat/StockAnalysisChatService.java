@@ -78,7 +78,6 @@ public class StockAnalysisChatService {
             return new ChatTurn(
                     conversationId,
                     response,
-                    memoryRepository.getContextPercentage(conversationId),
                     memoryRepository.getLastRetrievedMemories()
             );
         } catch (RuntimeException ex) {
@@ -107,7 +106,6 @@ public class StockAnalysisChatService {
         return new ChatTurn(
                 conversationId,
                 response,
-                memoryRepository.getContextPercentage(conversationId),
                 memoryRepository.getLastRetrievedMemories()
         );
     }
@@ -115,7 +113,6 @@ public class StockAnalysisChatService {
     public record ChatTurn(
             String conversationId,
             String response,
-            Double contextPercentage,
             List<String> retrievedMemories
     ) {
     }

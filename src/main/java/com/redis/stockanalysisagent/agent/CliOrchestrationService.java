@@ -62,11 +62,8 @@ public class CliOrchestrationService {
             System.out.println("Assistant");
             System.out.println("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
             System.out.println(turn.response());
-            if (turn.contextPercentage() != null) {
-                System.out.println();
-                System.out.println("Memory context used: " + Math.round(turn.contextPercentage() * 100) + "%");
-            }
             if (turn.retrievedMemories() != null && !turn.retrievedMemories().isEmpty()) {
+                System.out.println();
                 System.out.println("Retrieved memories:");
                 turn.retrievedMemories().stream()
                         .limit(3)
