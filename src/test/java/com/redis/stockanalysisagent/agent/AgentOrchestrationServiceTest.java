@@ -7,6 +7,7 @@ import com.redis.stockanalysisagent.agent.fundamentalsagent.FundamentalsAgent;
 import com.redis.stockanalysisagent.agent.fundamentalsagent.FundamentalsSnapshot;
 import com.redis.stockanalysisagent.agent.marketdataagent.MarketDataAgent;
 import com.redis.stockanalysisagent.agent.marketdataagent.MarketSnapshot;
+import com.redis.stockanalysisagent.agent.marketdataagent.MarketDataTools;
 import com.redis.stockanalysisagent.agent.newsagent.NewsAgent;
 import com.redis.stockanalysisagent.agent.newsagent.NewsItem;
 import com.redis.stockanalysisagent.agent.newsagent.NewsSnapshot;
@@ -49,19 +50,35 @@ class AgentOrchestrationServiceTest {
         try {
             AgentOrchestrationService service = new AgentOrchestrationService(
                     new CoordinatorAgent(new CoordinatorRoutingAgent(Optional.empty())),
-                    new MarketDataAgent(ticker -> {
-                        marketStarted.countDown();
-                        await(releaseAgents);
-                        return new MarketSnapshot(
-                                ticker.toUpperCase(),
-                                new BigDecimal("150.00"),
-                                new BigDecimal("148.00"),
-                                new BigDecimal("2.00"),
-                                new BigDecimal("1.35"),
-                                OffsetDateTime.parse("2026-03-16T00:00:00Z"),
-                                "test-market"
-                        );
-                    }),
+                    new MarketDataAgent(
+                            ticker -> {
+                                marketStarted.countDown();
+                                await(releaseAgents);
+                                return new MarketSnapshot(
+                                        ticker.toUpperCase(),
+                                        new BigDecimal("150.00"),
+                                        new BigDecimal("148.00"),
+                                        new BigDecimal("2.00"),
+                                        new BigDecimal("1.35"),
+                                        OffsetDateTime.parse("2026-03-16T00:00:00Z"),
+                                        "test-market"
+                                );
+                            },
+                            new MarketDataTools(ticker -> {
+                                marketStarted.countDown();
+                                await(releaseAgents);
+                                return new MarketSnapshot(
+                                        ticker.toUpperCase(),
+                                        new BigDecimal("150.00"),
+                                        new BigDecimal("148.00"),
+                                        new BigDecimal("2.00"),
+                                        new BigDecimal("1.35"),
+                                        OffsetDateTime.parse("2026-03-16T00:00:00Z"),
+                                        "test-market"
+                                );
+                            }),
+                            Optional.empty()
+                    ),
                     new FundamentalsAgent((ticker, marketSnapshot) -> {
                         fundamentalsObservedPrice.set(marketSnapshot.map(MarketSnapshot::currentPrice).orElse(null));
                         return new FundamentalsSnapshot(

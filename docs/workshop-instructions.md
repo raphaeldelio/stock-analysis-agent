@@ -492,6 +492,62 @@ Expected result:
 
 This slice matters because agent autonomy is only safe when expensive external calls are controlled. By putting the cache at the provider boundary, we protect the current orchestration flow now and keep the same safety net for future tool-backed agents later.
 
+## Part 10: Tool-Backed Market Data Agent
+
+### Objective
+
+Convert `MarketDataAgent` into the first specialist agent that uses Spring AI tool-calling while still relying on the cached provider layer for the actual market data.
+
+### What Learners Build
+
+1. A `MarketDataTools` component with a coarse `getMarketSnapshot` tool.
+2. A tool-aware `ChatClient` inside `MarketDataAgent`.
+3. A market-data prompt that requires tool use before returning a completed result.
+4. A deterministic fallback path when no chat model is configured.
+5. A direct-answer path that can reuse the market agent's own message for simple market-only requests.
+
+### Acceptance Criteria
+
+- `MarketDataAgent` uses Spring AI tools at runtime when a chat model is configured
+- the tool returns normalized market data from the existing provider seam
+- cached provider lookups still prevent repeated external API hits
+- the market-only path still works in test and no-model runs
+- tests cover the deterministic fallback path
+
+### Automated Validation
+
+- run `./gradlew test`
+- verify there is a market-data agent test covering the no-model fallback path
+
+### Manual Smoke Test
+
+Make sure Redis is running:
+
+```bash
+docker compose up -d redis
+```
+
+Then run:
+
+```bash
+./gradlew bootRun
+```
+
+Enter:
+
+- `What's the current price?`
+- then `AAPL`
+
+Expected result:
+
+- the coordinator routes to `MARKET_DATA`
+- the market-data agent completes successfully
+- the final answer still returns a direct market response
+
+### Teaching Point
+
+This slice introduces the workshop’s preferred pattern for tool-backed specialists: the LLM decides which coarse tool to use inside the agent, but the actual external call still goes through the cached provider seam so we do not lose control over cost or duplication.
+
 ## Authoring Rule
 
 Whenever a new workshop slice lands in the codebase, update this file with:

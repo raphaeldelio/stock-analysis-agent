@@ -166,14 +166,15 @@ public class AgentOrchestrationService {
 
     private AgentExecutionOutcome executeMarketData(AnalysisRequest request) {
         try {
-            MarketDataResult marketDataResult = marketDataAgent.execute(request.ticker());
+            MarketDataResult marketDataResult = marketDataAgent.execute(request.ticker(), request.question());
             return AgentExecutionOutcome.completed(
                     new AgentExecution(
                             AgentType.MARKET_DATA,
                             AgentExecutionStatus.COMPLETED,
-                            "Market Data Agent fetched a snapshot from the configured provider."
+                            "Market Data Agent used its market-data tools to fetch a current snapshot."
                     ),
                     null,
+                    marketDataResult.getMessage(),
                     marketDataResult.getFinalResponse(),
                     null,
                     null,
@@ -200,6 +201,7 @@ public class AgentOrchestrationService {
                     ),
                     null,
                     null,
+                    null,
                     fundamentalsResult.getFinalResponse(),
                     null,
                     null
@@ -218,6 +220,7 @@ public class AgentOrchestrationService {
                             AgentExecutionStatus.COMPLETED,
                             "News Agent collected recent company-event signals and web news relevant to the requested ticker."
                     ),
+                    null,
                     null,
                     null,
                     null,
@@ -242,6 +245,7 @@ public class AgentOrchestrationService {
                     null,
                     null,
                     null,
+                    null,
                     technicalAnalysisResult.getFinalResponse()
             );
         } catch (RuntimeException ex) {
@@ -262,6 +266,7 @@ public class AgentOrchestrationService {
                 null,
                 null,
                 null,
+                null,
                 null
         );
     }
@@ -270,6 +275,9 @@ public class AgentOrchestrationService {
         state.agentExecutions.add(outcome.execution);
         if (outcome.limitations != null) {
             state.limitations.add(outcome.limitations);
+        }
+        if (outcome.marketDirectAnswer != null && !outcome.marketDirectAnswer.isBlank()) {
+            state.marketDirectAnswer = outcome.marketDirectAnswer;
         }
         if (outcome.marketSnapshot != null) {
             state.marketSnapshot = outcome.marketSnapshot;
@@ -287,6 +295,9 @@ public class AgentOrchestrationService {
 
     private String buildAnswer(AnalysisRequest request, ExecutionPlan executionPlan, ExecutionState state) {
         if (shouldUseDirectMarketAnswer(executionPlan, state.marketSnapshot)) {
+            if (state.marketDirectAnswer != null && !state.marketDirectAnswer.isBlank()) {
+                return state.marketDirectAnswer;
+            }
             return marketDataAgent.createDirectAnswer(state.marketSnapshot);
         }
 
@@ -423,6 +434,7 @@ public class AgentOrchestrationService {
     private static class ExecutionState {
         private final List<AgentExecution> agentExecutions = new ArrayList<>();
         private final List<String> limitations = new ArrayList<>();
+        private String marketDirectAnswer;
         private MarketSnapshot marketSnapshot;
         private FundamentalsSnapshot fundamentalsSnapshot;
         private NewsSnapshot newsSnapshot;
@@ -432,6 +444,7 @@ public class AgentOrchestrationService {
     private static class AgentExecutionOutcome {
         private final AgentExecution execution;
         private final String limitations;
+        private final String marketDirectAnswer;
         private final MarketSnapshot marketSnapshot;
         private final FundamentalsSnapshot fundamentalsSnapshot;
         private final NewsSnapshot newsSnapshot;
@@ -440,6 +453,7 @@ public class AgentOrchestrationService {
         private AgentExecutionOutcome(
                 AgentExecution execution,
                 String limitations,
+                String marketDirectAnswer,
                 MarketSnapshot marketSnapshot,
                 FundamentalsSnapshot fundamentalsSnapshot,
                 NewsSnapshot newsSnapshot,
@@ -447,6 +461,7 @@ public class AgentOrchestrationService {
         ) {
             this.execution = execution;
             this.limitations = limitations;
+            this.marketDirectAnswer = marketDirectAnswer;
             this.marketSnapshot = marketSnapshot;
             this.fundamentalsSnapshot = fundamentalsSnapshot;
             this.newsSnapshot = newsSnapshot;
@@ -456,6 +471,7 @@ public class AgentOrchestrationService {
         private static AgentExecutionOutcome completed(
                 AgentExecution execution,
                 String limitation,
+                String marketDirectAnswer,
                 MarketSnapshot marketSnapshot,
                 FundamentalsSnapshot fundamentalsSnapshot,
                 NewsSnapshot newsSnapshot,
@@ -464,6 +480,7 @@ public class AgentOrchestrationService {
             return new AgentExecutionOutcome(
                     execution,
                     limitation,
+                    marketDirectAnswer,
                     marketSnapshot,
                     fundamentalsSnapshot,
                     newsSnapshot,

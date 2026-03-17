@@ -263,6 +263,42 @@ Manual:
 - enter `Give me a full view on Apple with fundamentals, news, and technical analysis`
 - confirm the full analysis still works with Redis running as the cache backend
 
+## Checkpoint 10: Tool-Backed Market Data Agent
+
+### Learners Implement
+
+- a `MarketDataTools` component with a coarse `getMarketSnapshot` Spring AI tool
+- a tool-aware `ChatClient` inside `MarketDataAgent`
+- a market-data prompt that requires tool usage before returning a completed result
+- a deterministic fallback path for test and no-model runs
+- direct-answer wiring so market-only requests can reuse the market agent's own message
+
+### Facilitator Provides
+
+- the cached Twelve Data provider seam from earlier checkpoints
+- the Redis cache layer that prevents duplicate upstream calls
+- the current coordinator and orchestration flow
+
+### Validation
+
+Automated:
+
+- `./gradlew test`
+- confirm there is a dedicated market-data agent test covering the no-model fallback path
+
+Manual:
+
+- run `docker compose up -d redis`
+- run `./gradlew bootRun`
+- enter `What's the current price?`
+- answer `AAPL`
+- confirm `Selected agents` contains only `MARKET_DATA`
+- confirm the request still succeeds and returns a direct market answer
+
+### Teaching Point
+
+This is the first specialist-agent conversion pattern. The LLM now decides how to use a bounded tool inside `MarketDataAgent`, but the actual provider call still goes through the cache-aware service layer so repeated upstream requests stay controlled.
+
 ## Delivery Recommendation
 
 If time is tight, treat these as the must-hit live checkpoints:
@@ -273,3 +309,4 @@ If time is tight, treat these as the must-hit live checkpoints:
 4. Checkpoint 6 for real synthesis
 5. Checkpoint 8 for true orchestration maturity
 6. Checkpoint 9 for production-minded provider caching
+7. Checkpoint 10 for the first tool-backed specialist agent

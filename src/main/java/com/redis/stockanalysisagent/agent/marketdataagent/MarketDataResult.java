@@ -21,7 +21,11 @@ public class MarketDataResult {
     }
 
     public static MarketDataResult completed(MarketSnapshot finalResponse) {
-        return new MarketDataResult(FinishReason.COMPLETED, null, finalResponse);
+        return completed(null, finalResponse);
+    }
+
+    public static MarketDataResult completed(String message, MarketSnapshot finalResponse) {
+        return new MarketDataResult(FinishReason.COMPLETED, message, finalResponse);
     }
 
     public static MarketDataResult error(String message) {

@@ -45,13 +45,16 @@ Recommended live prompts:
 5. `Give me a full view on Apple with fundamentals, news, and technical analysis`
 
 That sequence shows the system moving from single-agent routing to full orchestration.
+It also gives you a clean moment to explain that the market-data specialist is now tool-backed while the other specialist agents are still being evolved toward that pattern.
 
 ## What To Explain Out Loud
 
 - The coordinator is LLM-backed and decides which specialized agents to run.
-- The specialized agents are not all LLM-backed.
-- Deterministic agents fetch or compute facts.
+- MarketDataAgent is now the first specialist agent that is also LLM-backed through Spring AI tools.
+- The other specialist agents still lean mostly deterministic today.
+- Deterministic providers still fetch or compute the underlying facts.
 - The model is used mainly for routing and synthesis, not for inventing market data.
+- Tool-backed specialists still go through the cached provider layer so the same upstream API is not hit repeatedly.
 - The CLI sections are just presentation. The runtime underneath is orchestration, not a permanent workflow.
 
 ## Common Failure Modes
@@ -143,6 +146,7 @@ That keeps the orchestration lesson intact even if live market data is having a 
 - Tavily-specific enrichment if the key is not configured
 - degradation demos that depend on forcing external failures
 - implementation-level concurrency discussion unless the group wants the deeper Spring material
+- the internal details of Spring AI tool-calling if the group mainly needs the orchestration picture
 
 ## Suggested Checkpoint Rhythm
 
