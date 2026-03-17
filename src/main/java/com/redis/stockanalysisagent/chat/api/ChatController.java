@@ -49,7 +49,7 @@ public class ChatController {
                 turn.response(),
                 turn.retrievedMemories(),
                 turn.fromSemanticCache(),
-                turn.triggeredAgents(),
+                turn.executionSteps(),
                 responseTimeMs
         ));
     }

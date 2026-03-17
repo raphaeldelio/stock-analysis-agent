@@ -48,7 +48,7 @@ class ChatControllerIntegrationTest {
                         "Apple is trading at $200.00.",
                         List.of("The user asked about Apple earlier."),
                         true,
-                        List.of(new ChatExecutionStep("MARKET_DATA", 320, "Processed the latest quote."))
+                        List.of(new ChatExecutionStep("MARKET_DATA", "Market Data", "agent", 320, "Processed the latest quote."))
                 ));
 
         ChatResponse response = client().post()
@@ -64,10 +64,12 @@ class ChatControllerIntegrationTest {
         assertThat(response.response()).isEqualTo("Apple is trading at $200.00.");
         assertThat(response.retrievedMemories()).containsExactly("The user asked about Apple earlier.");
         assertThat(response.fromSemanticCache()).isTrue();
-        assertThat(response.triggeredAgents())
+        assertThat(response.executionSteps())
                 .singleElement()
                 .satisfies(step -> {
-                    assertThat(step.agentType()).isEqualTo("MARKET_DATA");
+                    assertThat(step.id()).isEqualTo("MARKET_DATA");
+                    assertThat(step.label()).isEqualTo("Market Data");
+                    assertThat(step.kind()).isEqualTo("agent");
                     assertThat(step.durationMs()).isEqualTo(320);
                     assertThat(step.summary()).isEqualTo("Processed the latest quote.");
                 });
@@ -111,7 +113,7 @@ class ChatControllerIntegrationTest {
         assertThat(response.conversationId()).isEqualTo("test-user:" + response.sessionId());
         assertThat(response.response()).isEqualTo("hello back");
         assertThat(response.fromSemanticCache()).isFalse();
-        assertThat(response.triggeredAgents()).isEmpty();
+        assertThat(response.executionSteps()).isEmpty();
         assertThat(response.responseTimeMs()).isGreaterThanOrEqualTo(0);
     }
 

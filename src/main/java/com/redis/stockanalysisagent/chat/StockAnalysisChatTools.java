@@ -7,7 +7,6 @@ import com.redis.stockanalysisagent.agent.coordinatoragent.CoordinatorAgent;
 import com.redis.stockanalysisagent.agent.coordinatoragent.RoutingDecision;
 import com.redis.stockanalysisagent.api.AnalysisRequest;
 import com.redis.stockanalysisagent.api.AnalysisResponse;
-import com.redis.stockanalysisagent.semanticcache.SemanticAnalysisCache;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
@@ -19,22 +18,21 @@ import java.util.Map;
 @Component
 public class StockAnalysisChatTools {
 
+    private static final String KIND_SYSTEM = "system";
+    private static final String KIND_AGENT = "agent";
     private static final String COORDINATOR = "COORDINATOR";
-    private static final ToolResultMetadata NOT_FROM_CACHE = new ToolResultMetadata(false, List.of());
+    private static final ToolResultMetadata NO_METADATA = new ToolResultMetadata(List.of(), false);
 
     private final CoordinatorAgent coordinatorAgent;
     private final AgentOrchestrationService agentOrchestrationService;
-    private final SemanticAnalysisCache semanticAnalysisCache;
     private final ThreadLocal<ToolResultAccumulator> invocationMetadata = ThreadLocal.withInitial(ToolResultAccumulator::new);
 
     public StockAnalysisChatTools(
             CoordinatorAgent coordinatorAgent,
-            AgentOrchestrationService agentOrchestrationService,
-            SemanticAnalysisCache semanticAnalysisCache
+            AgentOrchestrationService agentOrchestrationService
     ) {
         this.coordinatorAgent = coordinatorAgent;
         this.agentOrchestrationService = agentOrchestrationService;
-        this.semanticAnalysisCache = semanticAnalysisCache;
     }
 
     @Tool(description = "Run the stock-analysis orchestration for a user's question. Use this once per user turn for in-scope stock-analysis requests, including combined requests that need fundamentals, news, technicals, and synthesis together. Pass the full request instead of decomposing it into separate tool calls unless you are only asking a clarification question.")
@@ -43,16 +41,11 @@ public class StockAnalysisChatTools {
             String request
     ) {
         ToolResultAccumulator metadata = invocationMetadata.get();
-        java.util.Optional<String> cachedResponse = semanticAnalysisCache.findAnswer(request);
-        if (cachedResponse.isPresent()) {
-            metadata.recordInvocation(true, List.of());
-            return cachedResponse.get();
-        }
-
         long coordinatorStartedAt = System.nanoTime();
         RoutingDecision routingDecision = coordinatorAgent.execute(request);
-        metadata.recordInvocation(false, List.of(new ChatExecutionStep(
+        metadata.recordInvocation(List.of(agentStep(
                 COORDINATOR,
+                "Coordinator",
                 elapsedDurationMs(coordinatorStartedAt),
                 coordinatorSummary(routingDecision)
         )));
@@ -68,10 +61,8 @@ public class StockAnalysisChatTools {
         AnalysisRequest analysisRequest = coordinatorAgent.toAnalysisRequest(routingDecision);
         AnalysisResponse response = agentOrchestrationService.processRequest(analysisRequest, routingDecision);
         String renderedResponse = renderAnalysis(response);
-        metadata.recordInvocation(false, extractTriggeredAgents(response));
-        if (response.limitations().isEmpty()) {
-            semanticAnalysisCache.store(request, renderedResponse);
-        }
+        metadata.recordInvocation(extractExecutionSteps(response));
+        metadata.markCacheable(response.limitations().isEmpty());
         return renderedResponse;
     }
 
@@ -82,7 +73,7 @@ public class StockAnalysisChatTools {
     public ToolResultMetadata consumeInvocationMetadata() {
         ToolResultAccumulator metadata = invocationMetadata.get();
         invocationMetadata.remove();
-        return metadata == null ? NOT_FROM_CACHE : metadata.snapshot();
+        return metadata == null ? NO_METADATA : metadata.snapshot();
     }
 
     private String resolveCoordinatorMessage(RoutingDecision routingDecision) {
@@ -106,18 +97,14 @@ public class StockAnalysisChatTools {
                 .formatted(response.answer(), String.join(" ", response.limitations()));
     }
 
-    private List<ChatExecutionStep> extractTriggeredAgents(AnalysisResponse response) {
+    private List<ChatExecutionStep> extractExecutionSteps(AnalysisResponse response) {
         if (response.agentExecutions() == null) {
             return List.of();
         }
 
         return response.agentExecutions().stream()
                 .filter(agentExecution -> agentExecution.status() != AgentExecutionStatus.SKIPPED)
-                .map(agentExecution -> new ChatExecutionStep(
-                        agentExecution.agentType().name(),
-                        agentExecution.durationMs(),
-                        agentExecution.summary()
-                ))
+                .map(this::toExecutionStep)
                 .toList();
     }
 
@@ -126,9 +113,26 @@ public class StockAnalysisChatTools {
     }
 
     public record ToolResultMetadata(
-            boolean fromSemanticCache,
-            List<ChatExecutionStep> triggeredAgents
+            List<ChatExecutionStep> executionSteps,
+            boolean cacheable
     ) {
+    }
+
+    private ChatExecutionStep toExecutionStep(com.redis.stockanalysisagent.agent.AgentExecution agentExecution) {
+        return agentStep(
+                agentExecution.agentType().name(),
+                formatAgentLabel(agentExecution.agentType()),
+                agentExecution.durationMs(),
+                agentExecution.summary()
+        );
+    }
+
+    private ChatExecutionStep systemStep(String id, String label, long durationMs, String summary) {
+        return new ChatExecutionStep(id, label, KIND_SYSTEM, durationMs, summary);
+    }
+
+    private ChatExecutionStep agentStep(String id, String label, long durationMs, String summary) {
+        return new ChatExecutionStep(id, label, KIND_AGENT, durationMs, summary);
     }
 
     private String coordinatorSummary(RoutingDecision routingDecision) {
@@ -191,32 +195,37 @@ public class StockAnalysisChatTools {
     private static final class ToolResultAccumulator {
 
         private int invocationCount;
-        private boolean allFromSemanticCache = true;
-        private final Map<String, ChatExecutionStep> triggeredAgents = new LinkedHashMap<>();
+        private boolean cacheable;
+        private final Map<String, ChatExecutionStep> executionSteps = new LinkedHashMap<>();
 
-        private void recordInvocation(boolean fromSemanticCache, List<ChatExecutionStep> agentExecutions) {
+        private void recordInvocation(List<ChatExecutionStep> steps) {
             invocationCount += 1;
-            allFromSemanticCache = allFromSemanticCache && fromSemanticCache;
 
-            for (ChatExecutionStep agentExecution : agentExecutions) {
-                triggeredAgents.merge(agentExecution.agentType(), agentExecution, ToolResultAccumulator::mergeAgentExecution);
+            for (ChatExecutionStep step : steps) {
+                executionSteps.merge(step.id(), step, ToolResultAccumulator::mergeExecutionStep);
             }
+        }
+
+        private void markCacheable(boolean cacheable) {
+            this.cacheable = this.cacheable || cacheable;
         }
 
         private ToolResultMetadata snapshot() {
             if (invocationCount == 0) {
-                return NOT_FROM_CACHE;
+                return NO_METADATA;
             }
 
             return new ToolResultMetadata(
-                    allFromSemanticCache,
-                    List.copyOf(triggeredAgents.values())
+                    List.copyOf(executionSteps.values()),
+                    cacheable
             );
         }
 
-        private static ChatExecutionStep mergeAgentExecution(ChatExecutionStep existing, ChatExecutionStep incoming) {
+        private static ChatExecutionStep mergeExecutionStep(ChatExecutionStep existing, ChatExecutionStep incoming) {
             return new ChatExecutionStep(
-                    incoming.agentType(),
+                    incoming.id(),
+                    incoming.label(),
+                    incoming.kind(),
                     existing.durationMs() + incoming.durationMs(),
                     mergeSummaries(existing.summary(), incoming.summary())
             );

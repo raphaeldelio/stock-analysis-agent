@@ -105,7 +105,7 @@
                 timestamp: new Date().toISOString(),
                 memories: response.retrievedMemories || [],
                 fromSemanticCache: Boolean(response.fromSemanticCache),
-                triggeredAgents: Array.isArray(response.triggeredAgents) ? response.triggeredAgents : [],
+                executionSteps: Array.isArray(response.executionSteps) ? response.executionSteps : [],
                 responseTimeMs: Number.isFinite(response.responseTimeMs) ? response.responseTimeMs : null
             });
             setStatus("Response received");
@@ -314,8 +314,8 @@
     function buildSupplementPanels(message) {
         const panels = [];
         const memories = Array.isArray(message.memories) ? message.memories : [];
-        const hasTriggeredAgentMetadata = Array.isArray(message.triggeredAgents);
-        const triggeredAgents = hasTriggeredAgentMetadata ? message.triggeredAgents : [];
+        const hasExecutionMetadata = Array.isArray(message.executionSteps);
+        const executionSteps = hasExecutionMetadata ? message.executionSteps : [];
 
         if (memories.length > 0) {
             panels.push(buildDisclosurePanel("Retrieved memories", memories, function (memory) {
@@ -325,20 +325,33 @@
             }));
         }
 
-        if (message.role === "assistant" && hasTriggeredAgentMetadata) {
-            panels.push(buildDisclosurePanel("Triggered agents", triggeredAgents, function (agent) {
+        if (message.role === "assistant" && hasExecutionMetadata) {
+            panels.push(buildDisclosurePanel("Execution breakdown", executionSteps, function (step) {
                 const item = document.createElement("li");
                 item.className = "message__disclosure-item";
 
                 const row = document.createElement("div");
                 row.className = "message__disclosure-item-row";
 
+                const heading = document.createElement("div");
+                heading.className = "message__disclosure-item-heading";
+
                 const label = document.createElement("span");
                 label.className = "message__disclosure-item-label";
-                label.textContent = formatAgentLabel(resolveAgentName(agent));
-                row.appendChild(label);
+                label.textContent = resolveStepLabel(step);
+                heading.appendChild(label);
 
-                const durationMs = resolveAgentDuration(agent);
+                const kind = resolveStepKind(step);
+                if (kind) {
+                    const kindBadge = document.createElement("span");
+                    kindBadge.className = "message__step-kind message__step-kind--" + kind;
+                    kindBadge.textContent = formatStepKind(kind);
+                    heading.appendChild(kindBadge);
+                }
+
+                row.appendChild(heading);
+
+                const durationMs = resolveStepDuration(step);
                 if (durationMs != null) {
                     const timingBadge = document.createElement("span");
                     timingBadge.className = "badge badge--timing badge--timing-inline";
@@ -348,14 +361,14 @@
 
                 item.appendChild(row);
 
-                const summary = resolveAgentSummary(agent);
+                const summary = resolveStepSummary(step);
                 if (summary) {
                     const details = document.createElement("details");
                     details.className = "message__subdisclosure";
 
                     const summaryToggle = document.createElement("summary");
                     summaryToggle.className = "message__subdisclosure-summary";
-                    summaryToggle.textContent = "Processed";
+                    summaryToggle.textContent = "Details";
                     details.appendChild(summaryToggle);
 
                     const body = document.createElement("div");
@@ -367,7 +380,7 @@
                 }
 
                 return item;
-            }, "No sub-agents triggered.", "message__disclosure-list--agents"));
+            }, "No execution steps recorded.", "message__disclosure-list--steps"));
         }
 
         if (panels.length === 0) {
@@ -716,28 +729,48 @@
             .join(" ");
     }
 
-    function resolveAgentName(agent) {
-        if (agent && typeof agent === "object" && typeof agent.agentType === "string") {
-            return agent.agentType;
+    function resolveStepLabel(step) {
+        if (step && typeof step === "object" && typeof step.label === "string" && step.label.trim()) {
+            return step.label.trim();
         }
 
-        return agent;
+        return formatAgentLabel(resolveStepId(step));
     }
 
-    function resolveAgentDuration(agent) {
-        if (agent && typeof agent === "object" && Number.isFinite(agent.durationMs)) {
-            return agent.durationMs;
+    function resolveStepId(step) {
+        if (step && typeof step === "object" && typeof step.id === "string") {
+            return step.id;
+        }
+
+        return step;
+    }
+
+    function resolveStepKind(step) {
+        if (step && typeof step === "object" && typeof step.kind === "string" && step.kind.trim()) {
+            return step.kind.trim().toLowerCase();
         }
 
         return null;
     }
 
-    function resolveAgentSummary(agent) {
-        if (agent && typeof agent === "object" && typeof agent.summary === "string" && agent.summary.trim()) {
-            return agent.summary.trim();
+    function resolveStepDuration(step) {
+        if (step && typeof step === "object" && Number.isFinite(step.durationMs)) {
+            return step.durationMs;
         }
 
         return null;
+    }
+
+    function resolveStepSummary(step) {
+        if (step && typeof step === "object" && typeof step.summary === "string" && step.summary.trim()) {
+            return step.summary.trim();
+        }
+
+        return null;
+    }
+
+    function formatStepKind(kind) {
+        return kind === "agent" ? "Agent" : "System";
     }
 
     function normalizeUserId(userId) {

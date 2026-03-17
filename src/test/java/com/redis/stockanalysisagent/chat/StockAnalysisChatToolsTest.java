@@ -9,52 +9,51 @@ import com.redis.stockanalysisagent.agent.coordinatoragent.ExecutionPlan;
 import com.redis.stockanalysisagent.agent.coordinatoragent.RoutingDecision;
 import com.redis.stockanalysisagent.api.AnalysisRequest;
 import com.redis.stockanalysisagent.api.AnalysisResponse;
-import com.redis.stockanalysisagent.semanticcache.SemanticAnalysisCache;
 import org.junit.jupiter.api.Test;
 
 import java.time.OffsetDateTime;
 import java.util.List;
-import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class StockAnalysisChatToolsTest {
 
     @Test
-    void returnsSemanticCacheHitBeforeCoordinator() {
+    void recordsCoordinatorStepWhenCoordinatorNeedsMoreInput() {
         CoordinatorAgent coordinatorAgent = mock(CoordinatorAgent.class);
         AgentOrchestrationService orchestrationService = mock(AgentOrchestrationService.class);
-        SemanticAnalysisCache semanticAnalysisCache = mock(SemanticAnalysisCache.class);
-
-        when(semanticAnalysisCache.findAnswer("What is Apple's current price?"))
-                .thenReturn(Optional.of("Apple is trading at $200.00."));
+        RoutingDecision routingDecision = RoutingDecision.needsMoreInput("Which company should I analyze?");
+        when(coordinatorAgent.execute("Can you analyze this stock?"))
+                .thenReturn(routingDecision);
 
         StockAnalysisChatTools chatTools = new StockAnalysisChatTools(
                 coordinatorAgent,
-                orchestrationService,
-                semanticAnalysisCache
+                orchestrationService
         );
 
-        String response = chatTools.analyzeStockRequest("What is Apple's current price?");
+        String response = chatTools.analyzeStockRequest("Can you analyze this stock?");
         StockAnalysisChatTools.ToolResultMetadata metadata = chatTools.consumeInvocationMetadata();
 
-        assertThat(response).isEqualTo("Apple is trading at $200.00.");
-        assertThat(metadata.fromSemanticCache()).isTrue();
-        assertThat(metadata.triggeredAgents()).isEmpty();
-        verify(coordinatorAgent, never()).execute(any(String.class));
-        verify(orchestrationService, never()).processRequest(any(), any());
+        assertThat(response).isEqualTo("Which company should I analyze?");
+        assertThat(metadata.executionSteps())
+                .singleElement()
+                .satisfies(step -> {
+                    assertThat(step.id()).isEqualTo("COORDINATOR");
+                    assertThat(step.label()).isEqualTo("Coordinator");
+                    assertThat(step.kind()).isEqualTo("agent");
+                    assertThat(step.durationMs()).isGreaterThanOrEqualTo(0);
+                    assertThat(step.summary()).contains("Requested clarification before routing");
+                });
+        assertThat(metadata.cacheable()).isFalse();
     }
 
     @Test
-    void storesSuccessfulCompletedAnalysisResponses() {
+    void recordsSuccessfulCompletedAnalysisResponsesAsCacheable() {
         CoordinatorAgent coordinatorAgent = mock(CoordinatorAgent.class);
         AgentOrchestrationService orchestrationService = mock(AgentOrchestrationService.class);
-        SemanticAnalysisCache semanticAnalysisCache = mock(SemanticAnalysisCache.class);
 
         RoutingDecision routingDecision = RoutingDecision.completed(
                 "AAPL",
@@ -78,8 +77,6 @@ class StockAnalysisChatToolsTest {
                 List.of()
         );
 
-        when(semanticAnalysisCache.findAnswer("What is Apple's current price?"))
-                .thenReturn(Optional.empty());
         when(coordinatorAgent.execute("What is Apple's current price?"))
                 .thenReturn(routingDecision);
         when(coordinatorAgent.toAnalysisRequest(routingDecision))
@@ -89,37 +86,41 @@ class StockAnalysisChatToolsTest {
 
         StockAnalysisChatTools chatTools = new StockAnalysisChatTools(
                 coordinatorAgent,
-                orchestrationService,
-                semanticAnalysisCache
+                orchestrationService
         );
 
         String response = chatTools.analyzeStockRequest("What is Apple's current price?");
         StockAnalysisChatTools.ToolResultMetadata metadata = chatTools.consumeInvocationMetadata();
 
         assertThat(response).isEqualTo("Apple is trading at $200.00.");
-        assertThat(metadata.fromSemanticCache()).isFalse();
-        assertThat(metadata.triggeredAgents())
-                .extracting(ChatExecutionStep::agentType)
+        assertThat(metadata.cacheable()).isTrue();
+        assertThat(metadata.executionSteps())
+                .extracting(ChatExecutionStep::id)
                 .containsExactly("COORDINATOR", "MARKET_DATA");
-        assertThat(metadata.triggeredAgents())
-                .filteredOn(step -> "COORDINATOR".equals(step.agentType()))
-                .singleElement()
-                .satisfies(step -> assertThat(step.summary()).contains("Resolved AAPL"));
-        assertThat(metadata.triggeredAgents())
-                .filteredOn(step -> "MARKET_DATA".equals(step.agentType()))
+        assertThat(metadata.executionSteps())
+                .filteredOn(step -> "COORDINATOR".equals(step.id()))
                 .singleElement()
                 .satisfies(step -> {
+                    assertThat(step.label()).isEqualTo("Coordinator");
+                    assertThat(step.kind()).isEqualTo("agent");
+                    assertThat(step.durationMs()).isGreaterThanOrEqualTo(0);
+                    assertThat(step.summary()).contains("Resolved AAPL");
+                });
+        assertThat(metadata.executionSteps())
+                .filteredOn(step -> "MARKET_DATA".equals(step.id()))
+                .singleElement()
+                .satisfies(step -> {
+                    assertThat(step.label()).isEqualTo("Market Data");
+                    assertThat(step.kind()).isEqualTo("agent");
                     assertThat(step.durationMs()).isEqualTo(125);
                     assertThat(step.summary()).isEqualTo("Market data completed.");
                 });
-        verify(semanticAnalysisCache).store("What is Apple's current price?", "Apple is trading at $200.00.");
     }
 
     @Test
     void accumulatesTriggeredAgentsAcrossMultipleToolCallsInTheSameTurn() {
         CoordinatorAgent coordinatorAgent = mock(CoordinatorAgent.class);
         AgentOrchestrationService orchestrationService = mock(AgentOrchestrationService.class);
-        SemanticAnalysisCache semanticAnalysisCache = mock(SemanticAnalysisCache.class);
 
         RoutingDecision fundamentalsDecision = RoutingDecision.completed(
                 "TSLA",
@@ -166,7 +167,6 @@ class StockAnalysisChatToolsTest {
                 List.of()
         );
 
-        when(semanticAnalysisCache.findAnswer(any(String.class))).thenReturn(Optional.empty());
         when(coordinatorAgent.execute("How do Tesla's fundamentals look?")).thenReturn(fundamentalsDecision);
         when(coordinatorAgent.execute("What do Tesla's technicals look like?")).thenReturn(technicalDecision);
         when(coordinatorAgent.toAnalysisRequest(fundamentalsDecision)).thenReturn(fundamentalsRequest);
@@ -176,29 +176,38 @@ class StockAnalysisChatToolsTest {
 
         StockAnalysisChatTools chatTools = new StockAnalysisChatTools(
                 coordinatorAgent,
-                orchestrationService,
-                semanticAnalysisCache
+                orchestrationService
         );
 
         chatTools.analyzeStockRequest("How do Tesla's fundamentals look?");
         chatTools.analyzeStockRequest("What do Tesla's technicals look like?");
         StockAnalysisChatTools.ToolResultMetadata metadata = chatTools.consumeInvocationMetadata();
 
-        assertThat(metadata.fromSemanticCache()).isFalse();
-        assertThat(metadata.triggeredAgents())
-                .extracting(ChatExecutionStep::agentType)
+        assertThat(metadata.cacheable()).isTrue();
+        assertThat(metadata.executionSteps())
+                .extracting(ChatExecutionStep::id)
                 .containsExactly("COORDINATOR", "FUNDAMENTALS", "TECHNICAL_ANALYSIS");
-        assertThat(metadata.triggeredAgents())
-                .filteredOn(step -> "COORDINATOR".equals(step.agentType()))
+        assertThat(metadata.executionSteps())
+                .filteredOn(step -> "COORDINATOR".equals(step.id()))
                 .singleElement()
-                .satisfies(step -> assertThat(step.summary()).contains("Resolved TSLA"));
-        assertThat(metadata.triggeredAgents())
-                .filteredOn(step -> !"COORDINATOR".equals(step.agentType()))
+                .satisfies(step -> {
+                    assertThat(step.label()).isEqualTo("Coordinator");
+                    assertThat(step.kind()).isEqualTo("agent");
+                    assertThat(step.summary()).contains("Resolved TSLA");
+                    assertThat(step.summary()).contains("Fundamentals");
+                    assertThat(step.summary()).contains("Technical Analysis");
+                });
+        assertThat(metadata.executionSteps())
+                .filteredOn(step -> "FUNDAMENTALS".equals(step.id()) || "TECHNICAL_ANALYSIS".equals(step.id()))
                 .extracting(ChatExecutionStep::durationMs)
                 .containsExactly(310L, 470L);
-        assertThat(metadata.triggeredAgents())
-                .filteredOn(step -> "FUNDAMENTALS".equals(step.agentType()))
+        assertThat(metadata.executionSteps())
+                .filteredOn(step -> "FUNDAMENTALS".equals(step.id()))
                 .singleElement()
-                .satisfies(step -> assertThat(step.summary()).isEqualTo("Fundamentals completed."));
+                .satisfies(step -> {
+                    assertThat(step.label()).isEqualTo("Fundamentals");
+                    assertThat(step.kind()).isEqualTo("agent");
+                    assertThat(step.summary()).isEqualTo("Fundamentals completed.");
+                });
     }
 }

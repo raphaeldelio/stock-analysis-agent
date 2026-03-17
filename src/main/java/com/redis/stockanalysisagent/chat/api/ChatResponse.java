@@ -11,7 +11,7 @@ public record ChatResponse(
         String response,
         List<String> retrievedMemories,
         boolean fromSemanticCache,
-        List<ChatExecutionStep> triggeredAgents,
+        List<ChatExecutionStep> executionSteps,
         long responseTimeMs
 ) {
 }
