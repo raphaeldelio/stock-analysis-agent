@@ -19,6 +19,7 @@ import com.redis.stockanalysisagent.news.tavily.TavilyNewsProvider;
 import com.redis.stockanalysisagent.news.tavily.TavilyNewsSearchResult;
 import com.redis.stockanalysisagent.news.tavily.TavilyProperties;
 import org.junit.jupiter.api.Test;
+import org.springframework.cache.concurrent.ConcurrentMapCacheManager;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.web.client.RestClient;
 
@@ -194,7 +195,11 @@ class AgentOrchestrationServiceTest {
     }
 
     private static TavilyNewsProvider tavilyStub() {
-        return new TavilyNewsProvider(RestClient.builder(), new TavilyProperties()) {
+        return new TavilyNewsProvider(
+                RestClient.builder(),
+                new TavilyProperties(),
+                new com.redis.stockanalysisagent.cache.ExternalDataCache(new ConcurrentMapCacheManager())
+        ) {
             @Override
             public TavilyNewsSearchResult search(String ticker, String companyName, String question) {
                 return TavilyNewsSearchResult.empty();

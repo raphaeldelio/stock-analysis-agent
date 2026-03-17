@@ -432,6 +432,66 @@ Expected result:
 
 This slice is a good example of “Spring-friendly, not framework-heavy” orchestration. We keep normal Spring services and explicit Java control flow, but use a Spring-managed executor plus `CompletableFuture` to parallelize the work that does not need to run sequentially.
 
+## Part 9: Redis Caching
+
+### Objective
+
+Add a Redis-backed cache layer around external provider calls so repeated market, SEC, and Tavily requests do not keep hitting the remote APIs.
+
+### What Learners Build
+
+1. Spring cache configuration backed by Redis.
+2. A small cache helper that deduplicates repeated loads by key.
+3. Provider-level caching for:
+   - Twelve Data quotes
+   - Twelve Data technical-analysis snapshots
+   - SEC ticker lookup
+   - SEC company facts
+   - SEC submissions
+   - Tavily search results
+4. A shared SEC ticker lookup service so fundamentals and news do not fetch the same ticker file separately.
+5. A local `compose.yaml` file for Redis.
+
+### Acceptance Criteria
+
+- repeated provider lookups reuse cached results instead of always making new remote calls
+- the SEC ticker file is no longer fetched independently by both fundamentals and news
+- the test suite proves duplicate loads are deduplicated
+- the app can run locally against Redis through Docker Compose
+
+### Automated Validation
+
+- run `./gradlew test`
+- verify there are tests covering repeated or concurrent cache lookups
+
+### Manual Smoke Test
+
+Start Redis:
+
+```bash
+docker compose up -d redis
+```
+
+Then run:
+
+```bash
+./gradlew bootRun
+```
+
+Use a broad prompt such as:
+
+- `Give me a full view on Apple with fundamentals, news, and technical analysis`
+
+Expected result:
+
+- the analysis still works normally
+- Redis is now acting as the cache backend for provider lookups
+- repeated runs are protected from unnecessary duplicate external calls
+
+### Teaching Point
+
+This slice matters because agent autonomy is only safe when expensive external calls are controlled. By putting the cache at the provider boundary, we protect the current orchestration flow now and keep the same safety net for future tool-backed agents later.
+
 ## Authoring Rule
 
 Whenever a new workshop slice lands in the codebase, update this file with:

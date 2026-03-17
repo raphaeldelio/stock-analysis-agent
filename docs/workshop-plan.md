@@ -38,13 +38,14 @@ Build a stock-analysis multi-agent orchestration application with Spring AI wher
   - LLM-backed synthesis agent with deterministic fallback for test/no-model runs
   - Dynamic orchestration dispatch with per-agent failure handling
   - Safe parallel fan-out for independent agents via `CompletableFuture`
+  - Redis-backed provider caching with duplicate-call protection and local Docker Compose support
 - In progress
   - Hardening milestone
   - Workshop polish milestone
 - Next up
   - add timeouts and retry boundaries around external providers
-  - add caching for market, SEC, and Tavily lookups
   - add workshop checkpoint tags or branches when the teaching path is stable
+  - decide how to evolve specialized agents toward tool-backed LLM flows without duplicating provider calls
 
 ## Milestones
 
@@ -97,11 +98,15 @@ If a milestone cannot be verified through all three, it is not done.
 - `news/sec/SecNewsProvider` resolves ticker-to-CIK and normalizes recent SEC filings into official company-event signals.
 - `news/tavily/TavilyNewsProvider` enriches the news snapshot with investor-relevant web coverage when a Tavily key is configured.
 - `technicalanalysis/twelvedata/TwelveDataTechnicalAnalysisProvider` retrieves time-series data and computes SMA, EMA, and RSI in Java.
+- `cache/ExternalDataCache` protects provider calls from duplicate execution and currently uses Redis as the main cache backend.
+- `sec/SecTickerLookupService` centralizes SEC ticker-to-CIK resolution so fundamentals and news do not fetch the ticker file independently.
+- `compose.yaml` provides the local Redis service used by the cache layer.
 - local secrets and per-machine settings can live in an optional git-ignored `application-local.properties` file at the repository root.
 - `agent/synthesisagent/SynthesisAgent` is now a true LLM-backed agent at runtime and consumes only structured outputs from the specialized agents.
 - in test and no-model runs, `agent/synthesisagent/SynthesisAgent` falls back to a deterministic synthesis path so the workshop remains runnable without credentials.
 - selected agents can now fail independently without crashing the entire request; failures are surfaced in agent execution status and limitations.
 - the current runtime parallelizes independent specialized agents but still lets dependent work, such as fundamentals with market-price context, wait for the data it needs.
+- repeated external provider calls are now deduplicated through the cache layer, which is important both for the current orchestration flow and for future tool-backed specialist agents.
 - Integration and orchestration tests are green and provide a simple routing override for repeatable verification.
 - the repository now includes separate learner instructions, checkpoint mapping, and facilitator notes so the teaching path is no longer implicit.
 
@@ -122,8 +127,8 @@ This keeps the workshop centered on agents rather than on a generic `analysis` p
 ## Immediate Backlog
 
 1. Add timeouts and retry boundaries around Twelve Data, SEC, and Tavily calls.
-2. Add caching for repeated market, fundamentals, and news requests.
-3. Add checkpoint tags or branches and facilitator smoke-test scripts.
+2. Add checkpoint tags or branches and facilitator smoke-test scripts.
+3. Decide how tool-backed specialist agents should reuse the current Redis cache layer.
 
 ## Deferred Scope
 

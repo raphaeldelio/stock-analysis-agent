@@ -45,6 +45,18 @@ STOCK_ANALYSIS_MARKET_DATA_PROVIDER=mock
 - `docs/workshop-checkpoints.md` maps the workshop into explicit checkpoints with learner scope and validation steps
 - `docs/facilitator-notes.md` captures local setup, live-demo guidance, and common failure modes
 
+## Local Infrastructure
+
+Redis is the current cache backend for external provider calls.
+
+Start it locally with:
+
+```bash
+docker compose up -d redis
+```
+
+The repository includes [compose.yaml](/Users/raphaeldelio/Documents/GitHub/stock-analysis-agent/compose.yaml) for that setup.
+
 ## Local Config
 
 For local development, you can keep secrets and per-machine settings in a git-ignored file at the repo root:
@@ -61,6 +73,7 @@ stock-analysis.sec.user-agent=stock-analysis-agent your-email@example.com
 ```
 
 The app will load that file automatically if it exists.
+If you ever want to bypass Redis locally, you can set `spring.cache.type=simple`.
 
 ## Non-Goals For The First Slice
 
@@ -95,6 +108,7 @@ The first slice returns:
 When multiple specialized agents are selected, `SynthesisAgent` now uses Spring AI to produce the final grounded response from the structured agent outputs. In test and no-model setups, it falls back to a deterministic synthesis so the workshop remains runnable.
 The orchestration layer now dispatches agents dynamically from the execution plan and degrades cleanly when one selected agent fails.
 Independent agents now fan out through `CompletableFuture` on a Spring-managed executor, while synthesis still waits for the selected analysis tasks to finish.
+External provider calls now go through a Redis-backed cache layer so repeated market, SEC, and Tavily lookups are not triggered unnecessarily.
 
 ## CLI Mode
 

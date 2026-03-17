@@ -1,11 +1,17 @@
 spring:
   application:
     name: stock-analysis-agent
+  cache:
+    type: ${SPRING_CACHE_TYPE:redis}
   config:
     import:
       - optional:file:./application-local.properties
       - optional:file:./application-local.yaml
       - optional:file:./application-local.yml
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
   ai:
     openai:
       api-key: ${OPENAI_API_KEY:${SPRING_AI_OPENAI_API_KEY:}}

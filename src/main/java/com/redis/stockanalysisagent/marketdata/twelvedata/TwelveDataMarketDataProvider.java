@@ -1,6 +1,8 @@
 package com.redis.stockanalysisagent.marketdata.twelvedata;
 
 import com.redis.stockanalysisagent.agent.marketdataagent.MarketSnapshot;
+import com.redis.stockanalysisagent.cache.CacheNames;
+import com.redis.stockanalysisagent.cache.ExternalDataCache;
 import com.redis.stockanalysisagent.marketdata.MarketDataProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -24,12 +26,15 @@ public class TwelveDataMarketDataProvider implements MarketDataProvider {
 
     private final RestClient restClient;
     private final TwelveDataProperties properties;
+    private final ExternalDataCache externalDataCache;
 
     public TwelveDataMarketDataProvider(
             RestClient.Builder restClientBuilder,
-            TwelveDataProperties properties
+            TwelveDataProperties properties,
+            ExternalDataCache externalDataCache
     ) {
         this.properties = properties;
+        this.externalDataCache = externalDataCache;
         this.restClient = restClientBuilder
                 .baseUrl(properties.getBaseUrl().toString())
                 .build();
@@ -44,38 +49,44 @@ public class TwelveDataMarketDataProvider implements MarketDataProvider {
                     """.stripIndent().trim());
         }
 
-        JsonNode response = restClient.get()
-                .uri(uriBuilder -> uriBuilder
-                        .path("/quote")
-                        .queryParam("symbol", ticker.toUpperCase())
-                        .queryParam("apikey", properties.getApiKey())
-                        .build())
-                .retrieve()
-                .body(JsonNode.class);
+        return externalDataCache.getOrLoad(
+                CacheNames.MARKET_DATA_QUOTES,
+                ticker.toUpperCase(),
+                () -> {
+                    JsonNode response = restClient.get()
+                            .uri(uriBuilder -> uriBuilder
+                                    .path("/quote")
+                                    .queryParam("symbol", ticker.toUpperCase())
+                                    .queryParam("apikey", properties.getApiKey())
+                                    .build())
+                            .retrieve()
+                            .body(JsonNode.class);
 
-        if (response == null) {
-            throw new IllegalStateException("Twelve Data returned an empty response.");
-        }
+                    if (response == null) {
+                        throw new IllegalStateException("Twelve Data returned an empty response.");
+                    }
 
-        if ("error".equalsIgnoreCase(optionalText(response, "status"))) {
-            throw new IllegalStateException("Twelve Data error: " + optionalText(response, "message", "Unknown error"));
-        }
+                    if ("error".equalsIgnoreCase(optionalText(response, "status"))) {
+                        throw new IllegalStateException("Twelve Data error: " + optionalText(response, "message", "Unknown error"));
+                    }
 
-        BigDecimal currentPrice = moneyField(response, "close");
-        BigDecimal previousClose = moneyField(response, "previous_close");
-        BigDecimal absoluteChange = moneyField(response, "change");
-        BigDecimal percentChange = percentField(response, "percent_change");
-        String symbol = textField(response, "symbol");
-        OffsetDateTime asOf = timestamp(response);
+                    BigDecimal currentPrice = moneyField(response, "close");
+                    BigDecimal previousClose = moneyField(response, "previous_close");
+                    BigDecimal absoluteChange = moneyField(response, "change");
+                    BigDecimal percentChange = percentField(response, "percent_change");
+                    String symbol = textField(response, "symbol");
+                    OffsetDateTime asOf = timestamp(response);
 
-        return new MarketSnapshot(
-                symbol,
-                currentPrice,
-                previousClose,
-                absoluteChange,
-                percentChange,
-                asOf,
-                "twelve-data"
+                    return new MarketSnapshot(
+                            symbol,
+                            currentPrice,
+                            previousClose,
+                            absoluteChange,
+                            percentChange,
+                            asOf,
+                            "twelve-data"
+                    );
+                }
         );
     }
 

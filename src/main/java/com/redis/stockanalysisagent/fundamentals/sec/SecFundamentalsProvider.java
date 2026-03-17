@@ -2,7 +2,11 @@ package com.redis.stockanalysisagent.fundamentals.sec;
 
 import com.redis.stockanalysisagent.agent.fundamentalsagent.FundamentalsSnapshot;
 import com.redis.stockanalysisagent.agent.marketdataagent.MarketSnapshot;
+import com.redis.stockanalysisagent.cache.CacheNames;
+import com.redis.stockanalysisagent.cache.ExternalDataCache;
 import com.redis.stockanalysisagent.fundamentals.FundamentalsProvider;
+import com.redis.stockanalysisagent.sec.SecCompanyReference;
+import com.redis.stockanalysisagent.sec.SecTickerLookupService;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -13,9 +17,7 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.Arrays;
 import java.util.Comparator;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -30,20 +32,23 @@ public class SecFundamentalsProvider implements FundamentalsProvider {
 
     private static final Set<String> ANNUAL_FORMS = Set.of("10-K", "10-K/A", "20-F", "20-F/A", "40-F", "40-F/A");
 
-    private final RestClient tickerRestClient;
     private final RestClient companyFactsRestClient;
-    private final SecProperties properties;
+    private final SecTickerLookupService secTickerLookupService;
+    private final ExternalDataCache externalDataCache;
 
-    private volatile Map<String, SecCompanyReference> tickerIndex;
-
-    public SecFundamentalsProvider(RestClient.Builder restClientBuilder, SecProperties properties) {
-        this.properties = properties;
+    public SecFundamentalsProvider(
+            RestClient.Builder restClientBuilder,
+            SecProperties properties,
+            SecTickerLookupService secTickerLookupService,
+            ExternalDataCache externalDataCache
+    ) {
+        this.secTickerLookupService = secTickerLookupService;
+        this.externalDataCache = externalDataCache;
 
         RestClient.Builder configuredBuilder = restClientBuilder
                 .defaultHeader("User-Agent", properties.getUserAgent())
                 .defaultHeader("Accept-Encoding", "gzip, deflate");
 
-        this.tickerRestClient = configuredBuilder.build();
         this.companyFactsRestClient = configuredBuilder
                 .baseUrl(properties.getDataBaseUrl().toString())
                 .build();
@@ -51,7 +56,7 @@ public class SecFundamentalsProvider implements FundamentalsProvider {
 
     @Override
     public FundamentalsSnapshot fetchSnapshot(String ticker, Optional<MarketSnapshot> marketSnapshot) {
-        SecCompanyReference companyReference = resolveCompanyReference(ticker);
+        SecCompanyReference companyReference = secTickerLookupService.resolve(ticker);
         JsonNode companyFacts = fetchCompanyFacts(companyReference);
 
         JsonNode facts = companyFacts.path("facts");
@@ -113,62 +118,23 @@ public class SecFundamentalsProvider implements FundamentalsProvider {
         );
     }
 
-    private SecCompanyReference resolveCompanyReference(String ticker) {
-        Map<String, SecCompanyReference> localIndex = tickerIndex;
-        if (localIndex == null) {
-            synchronized (this) {
-                if (tickerIndex == null) {
-                    tickerIndex = loadTickerIndex();
-                }
-                localIndex = tickerIndex;
-            }
-        }
-
-        SecCompanyReference companyReference = localIndex.get(ticker.toUpperCase());
-        if (companyReference == null) {
-            throw new IllegalStateException("SEC ticker lookup returned no CIK for ticker " + ticker.toUpperCase() + ".");
-        }
-
-        return companyReference;
-    }
-
-    private Map<String, SecCompanyReference> loadTickerIndex() {
-        JsonNode payload = tickerRestClient.get()
-                .uri(properties.getTickerFileUrl())
-                .retrieve()
-                .body(JsonNode.class);
-
-        if (payload == null || payload.size() == 0) {
-            throw new IllegalStateException("SEC ticker lookup returned an empty response.");
-        }
-
-        Map<String, SecCompanyReference> companies = new LinkedHashMap<>();
-        payload.properties().forEach(entry -> {
-            JsonNode company = entry.getValue();
-            String ticker = textOrBlank(company, "ticker");
-            if (ticker == null || ticker.isBlank()) {
-                return;
-            }
-
-            String cik = "%010d".formatted(longOrDefault(company, "cik_str", 0L));
-            String title = textOrBlank(company, "title");
-            companies.put(ticker.toUpperCase(), new SecCompanyReference(ticker.toUpperCase(), title, cik));
-        });
-
-        return Map.copyOf(companies);
-    }
-
     private JsonNode fetchCompanyFacts(SecCompanyReference companyReference) {
-        JsonNode payload = companyFactsRestClient.get()
-                .uri("/api/xbrl/companyfacts/CIK{cik}.json", companyReference.cik())
-                .retrieve()
-                .body(JsonNode.class);
+        return externalDataCache.getOrLoad(
+                CacheNames.SEC_COMPANY_FACTS,
+                companyReference.cik(),
+                () -> {
+                    JsonNode payload = companyFactsRestClient.get()
+                            .uri("/api/xbrl/companyfacts/CIK{cik}.json", companyReference.cik())
+                            .retrieve()
+                            .body(JsonNode.class);
 
-        if (payload == null || payload.size() == 0) {
-            throw new IllegalStateException("SEC company facts returned an empty response for " + companyReference.ticker() + ".");
-        }
+                    if (payload == null || payload.size() == 0) {
+                        throw new IllegalStateException("SEC company facts returned an empty response for " + companyReference.ticker() + ".");
+                    }
 
-        return payload;
+                    return payload;
+                }
+        );
     }
 
     private SecFactValue latestAnnualFact(JsonNode facts, String taxonomy, List<String> concepts, String unitKey) {
@@ -322,18 +288,6 @@ public class SecFundamentalsProvider implements FundamentalsProvider {
         }
 
         return field.asText();
-    }
-
-    private long longOrDefault(JsonNode node, String fieldName, long defaultValue) {
-        JsonNode field = node.get(fieldName);
-        if (field == null || field.isMissingNode()) {
-            return defaultValue;
-        }
-
-        return field.asLong(defaultValue);
-    }
-
-    private record SecCompanyReference(String ticker, String companyName, String cik) {
     }
 
     private record SecFactValue(

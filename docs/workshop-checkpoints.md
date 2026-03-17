@@ -233,6 +233,36 @@ Manual:
 - enter `Give me a full view on Apple with fundamentals, news, and technical analysis`
 - confirm the CLI output still looks stable even though the selected agents now execute concurrently under the hood
 
+## Checkpoint 9: Redis Caching
+
+### Learners Implement
+
+- Spring cache configuration backed by Redis
+- a small cache helper that deduplicates repeated loads
+- provider-level caching for market data, technical analysis, SEC company data, SEC submissions, and Tavily results
+- a shared SEC ticker lookup service
+- a local `compose.yaml` for Redis
+
+### Facilitator Provides
+
+- the current provider seams
+- the dynamic orchestration flow that already makes those providers valuable
+- the local config pattern through `application-local.properties`
+
+### Validation
+
+Automated:
+
+- `./gradlew test`
+- confirm there are cache-focused regression tests for repeated lookups
+
+Manual:
+
+- run `docker compose up -d redis`
+- run `./gradlew bootRun`
+- enter `Give me a full view on Apple with fundamentals, news, and technical analysis`
+- confirm the full analysis still works with Redis running as the cache backend
+
 ## Delivery Recommendation
 
 If time is tight, treat these as the must-hit live checkpoints:
@@ -242,3 +272,4 @@ If time is tight, treat these as the must-hit live checkpoints:
 3. Checkpoint 4 for hybrid news
 4. Checkpoint 6 for real synthesis
 5. Checkpoint 8 for true orchestration maturity
+6. Checkpoint 9 for production-minded provider caching

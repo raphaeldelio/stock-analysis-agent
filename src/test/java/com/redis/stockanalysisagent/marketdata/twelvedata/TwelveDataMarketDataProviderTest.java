@@ -1,7 +1,9 @@
 package com.redis.stockanalysisagent.marketdata.twelvedata;
 
 import com.redis.stockanalysisagent.agent.marketdataagent.MarketSnapshot;
+import com.redis.stockanalysisagent.cache.ExternalDataCache;
 import org.junit.jupiter.api.Test;
+import org.springframework.cache.concurrent.ConcurrentMapCacheManager;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
@@ -24,7 +26,8 @@ class TwelveDataMarketDataProviderTest {
         MockRestServiceServer server = MockRestServiceServer.bindTo(restClientBuilder).build();
         TwelveDataMarketDataProvider provider = new TwelveDataMarketDataProvider(
                 restClientBuilder,
-                properties("demo")
+                properties("demo"),
+                cache()
         );
 
         server.expect(requestTo("https://api.twelvedata.com/quote?symbol=AAPL&apikey=demo"))
@@ -63,7 +66,8 @@ class TwelveDataMarketDataProviderTest {
         MockRestServiceServer server = MockRestServiceServer.bindTo(restClientBuilder).build();
         TwelveDataMarketDataProvider provider = new TwelveDataMarketDataProvider(
                 restClientBuilder,
-                properties("demo")
+                properties("demo"),
+                cache()
         );
 
         server.expect(requestTo("https://api.twelvedata.com/quote?symbol=AAPL&apikey=demo"))
@@ -86,11 +90,41 @@ class TwelveDataMarketDataProviderTest {
     @Test
     void failsFastWhenTwelveDataIsEnabledWithoutAnApiKey() {
         RestClient.Builder restClientBuilder = RestClient.builder();
-        TwelveDataMarketDataProvider provider = new TwelveDataMarketDataProvider(restClientBuilder, properties(""));
+        TwelveDataMarketDataProvider provider = new TwelveDataMarketDataProvider(restClientBuilder, properties(""), cache());
 
         assertThatThrownBy(() -> provider.fetchSnapshot("AAPL"))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("Twelve Data market data is enabled");
+    }
+
+    @Test
+    void reusesCachedQuoteInsteadOfCallingTwelveDataTwice() {
+        RestClient.Builder restClientBuilder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restClientBuilder).build();
+        TwelveDataMarketDataProvider provider = new TwelveDataMarketDataProvider(
+                restClientBuilder,
+                properties("demo"),
+                cache()
+        );
+
+        server.expect(requestTo("https://api.twelvedata.com/quote?symbol=AAPL&apikey=demo"))
+                .andExpect(method(HttpMethod.GET))
+                .andRespond(withSuccess("""
+                        {
+                          "symbol": "AAPL",
+                          "datetime": "2026-03-16 15:59:00",
+                          "close": "214.32",
+                          "previous_close": "211.01",
+                          "change": "3.31",
+                          "percent_change": "1.57"
+                        }
+                        """, MediaType.APPLICATION_JSON));
+
+        MarketSnapshot first = provider.fetchSnapshot("AAPL");
+        MarketSnapshot second = provider.fetchSnapshot("AAPL");
+
+        assertThat(second).isEqualTo(first);
+        server.verify();
     }
 
     private TwelveDataProperties properties(String apiKey) {
@@ -98,5 +132,9 @@ class TwelveDataMarketDataProviderTest {
         properties.setBaseUrl(URI.create("https://api.twelvedata.com"));
         properties.setApiKey(apiKey);
         return properties;
+    }
+
+    private ExternalDataCache cache() {
+        return new ExternalDataCache(new ConcurrentMapCacheManager());
     }
 }

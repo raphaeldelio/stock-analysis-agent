@@ -15,6 +15,7 @@ import com.redis.stockanalysisagent.news.tavily.TavilyNewsProvider;
 import com.redis.stockanalysisagent.news.tavily.TavilyNewsSearchResult;
 import com.redis.stockanalysisagent.technicalanalysis.TechnicalAnalysisProvider;
 import org.junit.jupiter.api.Test;
+import org.springframework.cache.concurrent.ConcurrentMapCacheManager;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
@@ -285,7 +286,11 @@ class AnalysisControllerIntegrationTest {
         @Bean
         @Primary
         TavilyNewsProvider tavilyNewsProvider() {
-            return new TavilyNewsProvider(RestClient.builder(), new com.redis.stockanalysisagent.news.tavily.TavilyProperties()) {
+            return new TavilyNewsProvider(
+                    RestClient.builder(),
+                    new com.redis.stockanalysisagent.news.tavily.TavilyProperties(),
+                    new com.redis.stockanalysisagent.cache.ExternalDataCache(new ConcurrentMapCacheManager())
+            ) {
                 @Override
                 public TavilyNewsSearchResult search(String ticker, String companyName, String question) {
                     return new TavilyNewsSearchResult(

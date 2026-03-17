@@ -1,8 +1,11 @@
 package com.redis.stockanalysisagent.news.sec;
 
 import com.redis.stockanalysisagent.agent.newsagent.NewsSnapshot;
+import com.redis.stockanalysisagent.cache.ExternalDataCache;
 import com.redis.stockanalysisagent.fundamentals.sec.SecProperties;
 import org.junit.jupiter.api.Test;
+import com.redis.stockanalysisagent.sec.SecTickerLookupService;
+import org.springframework.cache.concurrent.ConcurrentMapCacheManager;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
@@ -22,7 +25,14 @@ class SecNewsProviderTest {
     void normalizesRecentSecFilingsIntoNewsSnapshot() {
         RestClient.Builder restClientBuilder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(restClientBuilder).ignoreExpectOrder(true).build();
-        SecNewsProvider provider = new SecNewsProvider(restClientBuilder, properties());
+        ExternalDataCache cache = new ExternalDataCache(new ConcurrentMapCacheManager());
+        SecProperties properties = properties();
+        SecNewsProvider provider = new SecNewsProvider(
+                restClientBuilder,
+                properties,
+                new SecTickerLookupService(restClientBuilder, properties, cache),
+                cache
+        );
 
         server.expect(requestTo("https://www.sec.gov/files/company_tickers.json"))
                 .andExpect(method(HttpMethod.GET))

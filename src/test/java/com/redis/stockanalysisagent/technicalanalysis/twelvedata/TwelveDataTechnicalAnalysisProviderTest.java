@@ -1,8 +1,10 @@
 package com.redis.stockanalysisagent.technicalanalysis.twelvedata;
 
 import com.redis.stockanalysisagent.agent.technicalanalysisagent.TechnicalAnalysisSnapshot;
+import com.redis.stockanalysisagent.cache.ExternalDataCache;
 import com.redis.stockanalysisagent.marketdata.twelvedata.TwelveDataProperties;
 import org.junit.jupiter.api.Test;
+import org.springframework.cache.concurrent.ConcurrentMapCacheManager;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
@@ -26,7 +28,8 @@ class TwelveDataTechnicalAnalysisProviderTest {
         TwelveDataTechnicalAnalysisProvider provider = new TwelveDataTechnicalAnalysisProvider(
                 restClientBuilder,
                 marketDataProperties("demo"),
-                technicalAnalysisProperties()
+                technicalAnalysisProperties(),
+                cache()
         );
 
         server.expect(requestTo("https://api.twelvedata.com/time_series?symbol=AAPL&interval=1day&outputsize=60&order=asc&apikey=demo"))
@@ -84,7 +87,8 @@ class TwelveDataTechnicalAnalysisProviderTest {
         TwelveDataTechnicalAnalysisProvider provider = new TwelveDataTechnicalAnalysisProvider(
                 RestClient.builder(),
                 marketDataProperties(""),
-                technicalAnalysisProperties()
+                technicalAnalysisProperties(),
+                cache()
         );
 
         assertThatThrownBy(() -> provider.fetchSnapshot("AAPL"))
@@ -107,5 +111,9 @@ class TwelveDataTechnicalAnalysisProviderTest {
         properties.setEmaPeriod(20);
         properties.setRsiPeriod(14);
         return properties;
+    }
+
+    private ExternalDataCache cache() {
+        return new ExternalDataCache(new ConcurrentMapCacheManager());
     }
 }

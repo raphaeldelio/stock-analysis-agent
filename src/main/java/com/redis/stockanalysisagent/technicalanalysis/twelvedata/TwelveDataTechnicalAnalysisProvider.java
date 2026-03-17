@@ -1,6 +1,8 @@
 package com.redis.stockanalysisagent.technicalanalysis.twelvedata;
 
 import com.redis.stockanalysisagent.agent.technicalanalysisagent.TechnicalAnalysisSnapshot;
+import com.redis.stockanalysisagent.cache.CacheNames;
+import com.redis.stockanalysisagent.cache.ExternalDataCache;
 import com.redis.stockanalysisagent.marketdata.twelvedata.TwelveDataProperties;
 import com.redis.stockanalysisagent.technicalanalysis.TechnicalAnalysisProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -29,14 +31,17 @@ public class TwelveDataTechnicalAnalysisProvider implements TechnicalAnalysisPro
     private final RestClient restClient;
     private final TwelveDataProperties twelveDataProperties;
     private final TechnicalAnalysisProperties technicalAnalysisProperties;
+    private final ExternalDataCache externalDataCache;
 
     public TwelveDataTechnicalAnalysisProvider(
             RestClient.Builder restClientBuilder,
             TwelveDataProperties twelveDataProperties,
-            TechnicalAnalysisProperties technicalAnalysisProperties
+            TechnicalAnalysisProperties technicalAnalysisProperties,
+            ExternalDataCache externalDataCache
     ) {
         this.twelveDataProperties = twelveDataProperties;
         this.technicalAnalysisProperties = technicalAnalysisProperties;
+        this.externalDataCache = externalDataCache;
         this.restClient = restClientBuilder
                 .baseUrl(twelveDataProperties.getBaseUrl().toString())
                 .build();
@@ -51,63 +56,78 @@ public class TwelveDataTechnicalAnalysisProvider implements TechnicalAnalysisPro
                     """.stripIndent().trim());
         }
 
-        JsonNode response = restClient.get()
-                .uri(uriBuilder -> uriBuilder
-                        .path("/time_series")
-                        .queryParam("symbol", ticker.toUpperCase())
-                        .queryParam("interval", technicalAnalysisProperties.getInterval())
-                        .queryParam("outputsize", technicalAnalysisProperties.getOutputSize())
-                        .queryParam("order", "asc")
-                        .queryParam("apikey", twelveDataProperties.getApiKey())
-                        .build())
-                .retrieve()
-                .body(JsonNode.class);
-
-        if (response == null) {
-            throw new IllegalStateException("Twelve Data returned an empty time-series response.");
-        }
-
-        if ("error".equalsIgnoreCase(optionalText(response, "status", ""))) {
-            throw new IllegalStateException("Twelve Data error: " + optionalText(response, "message", "Unknown error"));
-        }
-
-        JsonNode valuesNode = response.path("values");
-        if (!valuesNode.isArray() || valuesNode.isEmpty()) {
-            throw new IllegalStateException("Twelve Data did not return time-series values for ticker " + ticker.toUpperCase() + ".");
-        }
-
-        List<BigDecimal> closes = new ArrayList<>();
-        OffsetDateTime asOf = null;
-        for (JsonNode valueNode : valuesNode) {
-            closes.add(new BigDecimal(requiredText(valueNode, "close")).setScale(2, RoundingMode.HALF_UP));
-            asOf = parseDateTime(requiredText(valueNode, "datetime"));
-        }
-
-        int requiredValues = Math.max(
-                technicalAnalysisProperties.getSmaPeriod(),
-                Math.max(technicalAnalysisProperties.getEmaPeriod(), technicalAnalysisProperties.getRsiPeriod() + 1)
-        );
-        if (closes.size() < requiredValues) {
-            throw new IllegalStateException("Twelve Data returned only %d values, but %d are required for technical analysis."
-                    .formatted(closes.size(), requiredValues));
-        }
-
-        BigDecimal latestClose = closes.getLast();
-        BigDecimal sma20 = simpleMovingAverage(closes, technicalAnalysisProperties.getSmaPeriod());
-        BigDecimal ema20 = exponentialMovingAverage(closes, technicalAnalysisProperties.getEmaPeriod());
-        BigDecimal rsi14 = rsi(closes, technicalAnalysisProperties.getRsiPeriod());
-
-        return new TechnicalAnalysisSnapshot(
+        String cacheKey = "%s|%s|%d|%d|%d|%d".formatted(
                 ticker.toUpperCase(),
                 technicalAnalysisProperties.getInterval(),
-                asOf != null ? asOf : OffsetDateTime.now(ZoneOffset.UTC),
-                latestClose,
-                sma20,
-                ema20,
-                rsi14,
-                trendSignal(latestClose, sma20, ema20),
-                momentumSignal(rsi14),
-                "twelve-data"
+                technicalAnalysisProperties.getOutputSize(),
+                technicalAnalysisProperties.getSmaPeriod(),
+                technicalAnalysisProperties.getEmaPeriod(),
+                technicalAnalysisProperties.getRsiPeriod()
+        );
+
+        return externalDataCache.getOrLoad(
+                CacheNames.TECHNICAL_ANALYSIS_SNAPSHOTS,
+                cacheKey,
+                () -> {
+                    JsonNode response = restClient.get()
+                            .uri(uriBuilder -> uriBuilder
+                                    .path("/time_series")
+                                    .queryParam("symbol", ticker.toUpperCase())
+                                    .queryParam("interval", technicalAnalysisProperties.getInterval())
+                                    .queryParam("outputsize", technicalAnalysisProperties.getOutputSize())
+                                    .queryParam("order", "asc")
+                                    .queryParam("apikey", twelveDataProperties.getApiKey())
+                                    .build())
+                            .retrieve()
+                            .body(JsonNode.class);
+
+                    if (response == null) {
+                        throw new IllegalStateException("Twelve Data returned an empty time-series response.");
+                    }
+
+                    if ("error".equalsIgnoreCase(optionalText(response, "status", ""))) {
+                        throw new IllegalStateException("Twelve Data error: " + optionalText(response, "message", "Unknown error"));
+                    }
+
+                    JsonNode valuesNode = response.path("values");
+                    if (!valuesNode.isArray() || valuesNode.isEmpty()) {
+                        throw new IllegalStateException("Twelve Data did not return time-series values for ticker " + ticker.toUpperCase() + ".");
+                    }
+
+                    List<BigDecimal> closes = new ArrayList<>();
+                    OffsetDateTime asOf = null;
+                    for (JsonNode valueNode : valuesNode) {
+                        closes.add(new BigDecimal(requiredText(valueNode, "close")).setScale(2, RoundingMode.HALF_UP));
+                        asOf = parseDateTime(requiredText(valueNode, "datetime"));
+                    }
+
+                    int requiredValues = Math.max(
+                            technicalAnalysisProperties.getSmaPeriod(),
+                            Math.max(technicalAnalysisProperties.getEmaPeriod(), technicalAnalysisProperties.getRsiPeriod() + 1)
+                    );
+                    if (closes.size() < requiredValues) {
+                        throw new IllegalStateException("Twelve Data returned only %d values, but %d are required for technical analysis."
+                                .formatted(closes.size(), requiredValues));
+                    }
+
+                    BigDecimal latestClose = closes.getLast();
+                    BigDecimal sma20 = simpleMovingAverage(closes, technicalAnalysisProperties.getSmaPeriod());
+                    BigDecimal ema20 = exponentialMovingAverage(closes, technicalAnalysisProperties.getEmaPeriod());
+                    BigDecimal rsi14 = rsi(closes, technicalAnalysisProperties.getRsiPeriod());
+
+                    return new TechnicalAnalysisSnapshot(
+                            ticker.toUpperCase(),
+                            technicalAnalysisProperties.getInterval(),
+                            asOf != null ? asOf : OffsetDateTime.now(ZoneOffset.UTC),
+                            latestClose,
+                            sma20,
+                            ema20,
+                            rsi14,
+                            trendSignal(latestClose, sma20, ema20),
+                            momentumSignal(rsi14),
+                            "twelve-data"
+                    );
+                }
         );
     }
 

@@ -2,7 +2,10 @@ package com.redis.stockanalysisagent.fundamentals.sec;
 
 import com.redis.stockanalysisagent.agent.fundamentalsagent.FundamentalsSnapshot;
 import com.redis.stockanalysisagent.agent.marketdataagent.MarketSnapshot;
+import com.redis.stockanalysisagent.cache.ExternalDataCache;
+import com.redis.stockanalysisagent.sec.SecTickerLookupService;
 import org.junit.jupiter.api.Test;
+import org.springframework.cache.concurrent.ConcurrentMapCacheManager;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
@@ -25,7 +28,13 @@ class SecFundamentalsProviderTest {
     void normalizesCompanyFactsIntoFundamentalsSnapshot() {
         RestClient.Builder restClientBuilder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(restClientBuilder).build();
-        SecFundamentalsProvider provider = new SecFundamentalsProvider(restClientBuilder, properties());
+        ExternalDataCache cache = cache();
+        SecFundamentalsProvider provider = new SecFundamentalsProvider(
+                restClientBuilder,
+                properties(),
+                new SecTickerLookupService(restClientBuilder, properties(), cache),
+                cache
+        );
 
         server.expect(requestTo("https://www.sec.gov/files/company_tickers.json"))
                 .andExpect(method(HttpMethod.GET))
@@ -202,11 +211,74 @@ class SecFundamentalsProviderTest {
         server.verify();
     }
 
+    @Test
+    void reusesCachedSecResponsesOnRepeatedFundamentalsLookup() {
+        RestClient.Builder restClientBuilder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(restClientBuilder).build();
+        ExternalDataCache cache = cache();
+        SecProperties properties = properties();
+        SecFundamentalsProvider provider = new SecFundamentalsProvider(
+                restClientBuilder,
+                properties,
+                new SecTickerLookupService(restClientBuilder, properties, cache),
+                cache
+        );
+
+        server.expect(requestTo("https://www.sec.gov/files/company_tickers.json"))
+                .andExpect(method(HttpMethod.GET))
+                .andExpect(header("User-Agent", "stock-analysis-agent-workshop workshop@example.com"))
+                .andRespond(withSuccess("""
+                        {
+                          "0": {
+                            "cik_str": 320193,
+                            "ticker": "AAPL",
+                            "title": "Apple Inc."
+                          }
+                        }
+                        """, MediaType.APPLICATION_JSON));
+
+        server.expect(requestTo("https://data.sec.gov/api/xbrl/companyfacts/CIK0000320193.json"))
+                .andExpect(method(HttpMethod.GET))
+                .andExpect(header("User-Agent", "stock-analysis-agent-workshop workshop@example.com"))
+                .andRespond(withSuccess("""
+                        {
+                          "facts": {
+                            "us-gaap": {
+                              "RevenueFromContractWithCustomerExcludingAssessedTax": {
+                                "units": {
+                                  "USD": [
+                                    {
+                                      "start": "2023-09-30",
+                                      "end": "2024-09-28",
+                                      "val": 400000000000,
+                                      "fy": 2024,
+                                      "fp": "FY",
+                                      "form": "10-K",
+                                      "filed": "2024-11-01"
+                                    }
+                                  ]
+                                }
+                              }
+                            }
+                          }
+                        }
+                        """, MediaType.APPLICATION_JSON));
+
+        provider.fetchSnapshot("AAPL", Optional.empty());
+        provider.fetchSnapshot("AAPL", Optional.empty());
+
+        server.verify();
+    }
+
     private SecProperties properties() {
         SecProperties properties = new SecProperties();
         properties.setDataBaseUrl(URI.create("https://data.sec.gov"));
         properties.setTickerFileUrl(URI.create("https://www.sec.gov/files/company_tickers.json"));
         properties.setUserAgent("stock-analysis-agent-workshop workshop@example.com");
         return properties;
+    }
+
+    private ExternalDataCache cache() {
+        return new ExternalDataCache(new ConcurrentMapCacheManager());
     }
 }

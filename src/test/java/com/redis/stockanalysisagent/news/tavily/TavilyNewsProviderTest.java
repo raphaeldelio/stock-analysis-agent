@@ -1,7 +1,9 @@
 package com.redis.stockanalysisagent.news.tavily;
 
 import com.redis.stockanalysisagent.agent.newsagent.NewsItem;
+import com.redis.stockanalysisagent.cache.ExternalDataCache;
 import org.junit.jupiter.api.Test;
+import org.springframework.cache.concurrent.ConcurrentMapCacheManager;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
@@ -20,7 +22,7 @@ class TavilyNewsProviderTest {
     void normalizesTavilySearchResultsIntoWebNewsItems() {
         RestClient.Builder restClientBuilder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(restClientBuilder).build();
-        TavilyNewsProvider provider = new TavilyNewsProvider(restClientBuilder, properties("tvly-demo"));
+        TavilyNewsProvider provider = new TavilyNewsProvider(restClientBuilder, properties("tvly-demo"), cache());
 
         server.expect(requestTo("https://api.tavily.com/search"))
                 .andExpect(method(HttpMethod.POST))
@@ -61,7 +63,7 @@ class TavilyNewsProviderTest {
 
     @Test
     void returnsEmptyResultsWhenNoApiKeyIsConfigured() {
-        TavilyNewsProvider provider = new TavilyNewsProvider(RestClient.builder(), properties(""));
+        TavilyNewsProvider provider = new TavilyNewsProvider(RestClient.builder(), properties(""), cache());
 
         TavilyNewsSearchResult result = provider.search("AAPL", "Apple Inc.", "What recent news matters for Apple investors?");
 
@@ -75,5 +77,9 @@ class TavilyNewsProviderTest {
         properties.setApiKey(apiKey);
         properties.setMaxResults(5);
         return properties;
+    }
+
+    private ExternalDataCache cache() {
+        return new ExternalDataCache(new ConcurrentMapCacheManager());
     }
 }

@@ -1,6 +1,8 @@
 package com.redis.stockanalysisagent.news.tavily;
 
 import com.redis.stockanalysisagent.agent.newsagent.NewsItem;
+import com.redis.stockanalysisagent.cache.CacheNames;
+import com.redis.stockanalysisagent.cache.ExternalDataCache;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
@@ -16,9 +18,15 @@ public class TavilyNewsProvider {
 
     private final RestClient restClient;
     private final TavilyProperties properties;
+    private final ExternalDataCache externalDataCache;
 
-    public TavilyNewsProvider(RestClient.Builder restClientBuilder, TavilyProperties properties) {
+    public TavilyNewsProvider(
+            RestClient.Builder restClientBuilder,
+            TavilyProperties properties,
+            ExternalDataCache externalDataCache
+    ) {
         this.properties = properties;
+        this.externalDataCache = externalDataCache;
         this.restClient = restClientBuilder
                 .baseUrl(properties.getBaseUrl().toString())
                 .build();
@@ -29,29 +37,42 @@ public class TavilyNewsProvider {
             return TavilyNewsSearchResult.empty();
         }
 
-        JsonNode response = restClient.post()
-                .uri("/search")
-                .body(requestBody(ticker, companyName, question))
-                .header("Authorization", "Bearer " + properties.getApiKey())
-                .retrieve()
-                .body(JsonNode.class);
+        String cacheKey = "%s|%s|%s|%d".formatted(
+                ticker.toUpperCase(),
+                normalize(companyName),
+                normalize(question),
+                properties.getMaxResults()
+        );
 
-        if (response == null) {
-            return TavilyNewsSearchResult.empty();
-        }
+        return externalDataCache.getOrLoad(
+                CacheNames.TAVILY_NEWS_SEARCH,
+                cacheKey,
+                () -> {
+                    JsonNode response = restClient.post()
+                            .uri("/search")
+                            .body(requestBody(ticker, companyName, question))
+                            .header("Authorization", "Bearer " + properties.getApiKey())
+                            .retrieve()
+                            .body(JsonNode.class);
 
-        if ("error".equalsIgnoreCase(optionalText(response, "status", ""))) {
-            throw new IllegalStateException("Tavily error: " + optionalText(response, "error", "Unknown error"));
-        }
+                    if (response == null) {
+                        return TavilyNewsSearchResult.empty();
+                    }
 
-        List<NewsItem> items = response.path("results").isArray()
-                ? response.path("results").valueStream()
-                .limit(properties.getMaxResults())
-                .map(this::toNewsItem)
-                .toList()
-                : List.of();
+                    if ("error".equalsIgnoreCase(optionalText(response, "status", ""))) {
+                        throw new IllegalStateException("Tavily error: " + optionalText(response, "error", "Unknown error"));
+                    }
 
-        return new TavilyNewsSearchResult(items, optionalText(response, "answer", null));
+                    List<NewsItem> items = response.path("results").isArray()
+                            ? response.path("results").valueStream()
+                            .limit(properties.getMaxResults())
+                            .map(this::toNewsItem)
+                            .toList()
+                            : List.of();
+
+                    return new TavilyNewsSearchResult(items, optionalText(response, "answer", null));
+                }
+        );
     }
 
     private Map<String, Object> requestBody(String ticker, String companyName, String question) {
@@ -70,6 +91,10 @@ public class TavilyNewsProvider {
                 ? companyName
                 : ticker.toUpperCase();
         return "%s (%s) investor news: %s".formatted(companyPart, ticker.toUpperCase(), question);
+    }
+
+    private String normalize(String value) {
+        return value == null ? "" : value.trim();
     }
 
     private NewsItem toNewsItem(JsonNode node) {

@@ -6,6 +6,12 @@ This file is for whoever runs the workshop live. It is intentionally practical r
 
 ## Required Local Setup
 
+Start Redis first:
+
+```bash
+docker compose up -d redis
+```
+
 Create a local `application-local.properties` file at the repository root with:
 
 ```properties
@@ -19,6 +25,7 @@ Notes:
 
 - `Tavily` is optional. The news agent still works with SEC-only results.
 - `SEC user-agent` is not something you fetch from SEC. It is a descriptive string you provide yourself, ideally app name plus an email address.
+- Redis uses the default local host/port from `compose.yaml`, so you usually do not need to configure it explicitly.
 
 ## Recommended Demo Order
 
@@ -90,6 +97,21 @@ Expected behavior:
 - this is acceptable
 - the news agent should still return official SEC signals
 
+### Redis is not running
+
+Symptom:
+
+- provider-backed requests fail when the app tries to use the cache
+
+Check:
+
+- `docker compose up -d redis`
+- Redis is healthy in `docker compose ps`
+
+Temporary fallback:
+
+- set `spring.cache.type=simple` in `application-local.properties`
+
 ### macOS Netty DNS warning
 
 Symptom:
@@ -139,4 +161,5 @@ Use this rhythm during delivery:
 - Twelve Data key is valid
 - SEC user-agent is set
 - Tavily key is available if you want the full hybrid news demo
+- Redis is running from `compose.yaml`
 - you have one fallback plan ready if a live provider is slow or rate-limited
