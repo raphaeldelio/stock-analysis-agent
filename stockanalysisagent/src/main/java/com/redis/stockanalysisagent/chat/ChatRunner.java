@@ -1,6 +1,7 @@
 package com.redis.stockanalysisagent.chat;
 
 import com.redis.stockanalysisagent.agent.coordinatoragent.CoordinatorAgent;
+import com.redis.stockanalysisagent.agent.coordinatoragent.ExecutionPlan;
 import com.redis.stockanalysisagent.agent.coordinatoragent.RoutingDecision;
 import com.redis.stockanalysisagent.agent.orchestration.AgentExecution;
 import com.redis.stockanalysisagent.agent.orchestration.AgentExecutionStatus;
@@ -63,13 +64,14 @@ class ChatRunner {
         }
 
         AnalysisRequest analysisRequest = coordinatorAgent.toAnalysisRequest(routingDecision);
-        AnalysisResponse response = agentOrchestrationService.processRequest(analysisRequest, routingDecision);
+        ExecutionPlan executionPlan = coordinatorAgent.createPlan(routingDecision);
+        AnalysisResponse response = agentOrchestrationService.processRequest(analysisRequest, executionPlan);
         executionSteps.addAll(extractExecutionSteps(response));
 
         return new AnalysisTurn(
-                renderAnalysis(response),
+                response.answer(),
                 List.copyOf(executionSteps),
-                response.limitations().isEmpty(),
+                true,
                 TokenUsageSummary.sum(executionSteps.stream().map(ChatExecutionStep::tokenUsage).toList())
         );
     }
@@ -84,15 +86,6 @@ class ChatRunner {
         }
 
         return "I could not complete the stock-analysis request.";
-    }
-
-    private String renderAnalysis(AnalysisResponse response) {
-        if (response.limitations().isEmpty()) {
-            return response.answer();
-        }
-
-        return "%s\n\nLimitations: %s"
-                .formatted(response.answer(), String.join(" ", response.limitations()));
     }
 
     private List<ChatExecutionStep> extractExecutionSteps(AnalysisResponse response) {
