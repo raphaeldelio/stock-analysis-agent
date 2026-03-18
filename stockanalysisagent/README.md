@@ -66,6 +66,12 @@ If you also want tracing:
 docker compose up -d zipkin
 ```
 
+If you want to run the finalized app in Docker too:
+
+```bash
+docker compose up -d stock-analysis-agent
+```
+
 These services are defined in:
 
 - [compose.yaml](/Users/raphaeldelio/Documents/GitHub/stock-analysis-agent/compose.yaml)
@@ -77,24 +83,55 @@ The easiest local setup is to use:
 - [/.env.example](/Users/raphaeldelio/Documents/GitHub/stock-analysis-agent/.env.example)
 - [application-local.properties.example](/Users/raphaeldelio/Documents/GitHub/stock-analysis-agent/application-local.properties.example)
 
-Create `application-local.properties` at the repository root and add values like:
+Create a repository-root `.env` or `application-local.properties` and add values like:
 
-```properties
-spring.ai.openai.api-key=YOUR_OPENAI_KEY
-stock-analysis.market-data.twelve-data.api-key=YOUR_TWELVE_DATA_API_KEY
-stock-analysis.news.tavily.api-key=YOUR_TAVILY_API_KEY
-stock-analysis.sec.user-agent=stock-analysis-agent your-email@example.com
-agent-memory.server.url=http://localhost:8000
+```dotenv
+OPENAI_API_KEY=YOUR_OPENAI_KEY
+TWELVE_DATA_API_KEY=YOUR_TWELVE_DATA_API_KEY
+TAVILY_API_KEY=YOUR_TAVILY_API_KEY
+SEC_USER_AGENT=stock-analysis-agent your-email@example.com
+AGENT_MEMORY_SERVER_URL=http://localhost:8000
 ```
 
 Typical things you will need:
 
 - `OPENAI_API_KEY`
-- Twelve Data API key
-- Tavily API key
+- Twelve Data API key from [Twelve Data](https://twelvedata.com/docs)
+- Tavily API key from [Tavily](https://app.tavily.com/home)
 - SEC user agent
 
-The application loads `application-local.properties` automatically if it exists.
+The application loads `.env` and `application-local.*` automatically when those files exist in either the repository root or the module directory.
+
+## Docker
+
+Build and run the finalized application with Compose:
+
+```bash
+docker compose up -d stock-analysis-agent
+```
+
+Or build the image manually from the repository root:
+
+```bash
+docker build -f stockanalysisagent/Dockerfile -t stock-analysis-agent .
+```
+
+Then run it with the same environment values the app already supports:
+
+```bash
+docker run --rm -p 8080:8080 \
+  -e OPENAI_API_KEY=YOUR_OPENAI_KEY \
+  -e TWELVE_DATA_API_KEY=YOUR_TWELVE_DATA_API_KEY \
+  -e TAVILY_API_KEY=YOUR_TAVILY_API_KEY \
+  -e SEC_USER_AGENT="stock-analysis-agent your-email@example.com" \
+  -e REDIS_HOST=host.docker.internal \
+  -e AGENT_MEMORY_SERVER_URL=http://host.docker.internal:8000 \
+  stock-analysis-agent
+```
+
+If you are already running the supporting services from [compose.yaml](/Users/raphaeldelio/Documents/GitHub/stock-analysis-agent/compose.yaml), this will expose the app on:
+
+- [http://localhost:8080](http://localhost:8080)
 
 ## Useful Commands
 

@@ -281,6 +281,9 @@ Replace the method body with this exact code:
 
 ```java
 UnifiedJedis redisClient = new UnifiedJedis("redis://%s:%s".formatted(redisHost, redisPort));
+SearchIndex index = createIndex(properties, redisClient);
+ensureIndexExists(index, properties.getName());
+
 return new SemanticCache.Builder()
         .name(properties.getName())
         .redisClient(redisClient)
@@ -294,14 +297,66 @@ return new SemanticCache.Builder()
         .build();
 ```
 
+Then add these helper methods below `initializeCache(...)`:
+
+```java
+private SearchIndex createIndex(SemanticCacheProperties properties, UnifiedJedis redisClient) {
+    return SearchIndex.fromDict(
+            Map.of(
+                    "index", Map.of(
+                            "name", properties.getName(),
+                            "prefix", "cache:" + properties.getName() + ":",
+                            "storage_type", "hash"
+                    ),
+                    "fields", List.of(
+                            Map.of("name", "prompt", "type", "text"),
+                            Map.of("name", "response", "type", "text"),
+                            Map.of(
+                                    "name", "prompt_vector",
+                                    "type", "vector",
+                                    "attrs", Map.of(
+                                            "dims", properties.getEmbeddingDimensions(),
+                                            "algorithm", "flat",
+                                            "distance_metric", "cosine"
+                                    )
+                            ),
+                            Map.of("name", "inserted_at", "type", "numeric"),
+                            Map.of("name", "updated_at", "type", "numeric"),
+                            Map.of("name", "user", "type", "tag"),
+                            Map.of("name", "session", "type", "tag"),
+                            Map.of("name", "category", "type", "tag")
+                    )
+            ),
+            redisClient
+    );
+}
+
+private void ensureIndexExists(SearchIndex index, String cacheName) {
+    if (index.exists()) {
+        return;
+    }
+
+    index.create();
+
+    if (!index.exists()) {
+        throw new IllegalStateException("Semantic cache index %s was not created.".formatted(cacheName));
+    }
+
+    log.info("Created semantic cache index {}", cacheName);
+}
+```
+
 Why you did this:
 
 - semantic caching needs Redis storage, an embedding model, and a similarity threshold
 - this class is where those pieces are assembled into one reusable cache service
+- the semantic cache index has to exist before the first lookup or store can work
 
 What this code is doing:
 
 - it creates the Redis client used by the semantic cache
+- it creates the Redis search index definition used by the semantic cache
+- it creates that index the first time the app starts if it is missing
 - it tells the semantic cache which embedding model and vector dimensions to use
 - it sets the similarity threshold that decides whether a cached answer is close enough to reuse
 - it sets the semantic cache TTL so reused answers stay fresh

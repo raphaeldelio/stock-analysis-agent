@@ -12,8 +12,13 @@ spring:
     type: ${SPRING_CACHE_TYPE:redis}
   config:
     import:
+      - optional:file:../.env[.properties]
+      - optional:file:./.env[.properties]
+      - optional:file:../application-local.properties
       - optional:file:./application-local.properties
+      - optional:file:../application-local.yaml
       - optional:file:./application-local.yaml
+      - optional:file:../application-local.yml
       - optional:file:./application-local.yml
   data:
     redis:

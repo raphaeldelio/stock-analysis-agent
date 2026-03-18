@@ -168,12 +168,12 @@ For local secrets and machine-specific settings, use:
 Typical local values include:
 
 - `OPENAI_API_KEY`
-- Twelve Data API key
-- Tavily API key
+- Twelve Data API key from [Twelve Data](https://twelvedata.com/docs)
+- Tavily API key from [Tavily](https://app.tavily.com/home)
 - SEC user agent
 - Agent Memory Server URL
 
-The app loads `application-local.properties` automatically if it exists.
+Both Spring Boot apps load `.env` and `application-local.*` automatically when those files exist in either the repository root or the module directory.
 
 ## Repository Map
 
