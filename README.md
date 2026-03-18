@@ -1,205 +1,206 @@
-# Stock Analysis Agent Workshop
+# Stock Analysis Agent
 
-This repository now has two modules:
+This repository teaches you how to build a production-style multi-agent system with Spring AI and Redis.
 
-- [stockanalysisagent](/Users/raphaeldelio/Documents/GitHub/stock-analysis-agent/stockanalysisagent) for the finalized implementation
-- [stockanalysisagentworkshop](/Users/raphaeldelio/Documents/GitHub/stock-analysis-agent/stockanalysisagentworkshop) for the learner-facing workshop skeleton
+It contains both:
 
-The repository root remains the main entrypoint, and the usual Gradle commands currently delegate to the finalized implementation module.
+- a learner-facing workshop
+- a finished reference implementation
 
-This repository is the final implementation target for a workshop about building a stock-analysis multi-agent orchestration application with Spring AI.
-The current default experience is a memory-backed chat frontend layered on top of the orchestration flow.
+If you are learning, start with the workshop.
 
-## Workshop Goal
+If you want to see the end state, run or read the final app.
 
-Build a predictable orchestration system where:
+## Start Here
 
-- a client can hold a stock-analysis conversation
-- a coordinator decides which specialized agents are relevant
-- agents fetch deterministic data from external providers
-- a synthesis step returns a grounded final answer
-- one agent failing does not crash the whole analysis
-- independent agents can fan out safely in parallel
-- chat memory supports follow-up questions across turns
+This repository has two modules:
 
-## Current Direction
+- [stockanalysisagentworkshop](/Users/raphaeldelio/Documents/GitHub/stock-analysis-agent/stockanalysisagentworkshop)
+  This is the workshop path. It is the best place to start if you want to learn how the system is built.
 
-- orchestration over workflow
-- deterministic data providers over model-generated facts
-- Spring AI for interpretation and synthesis
-- free data sources where possible
-- memory-backed chat frontend over one-shot prompts for the main workshop path
+- [stockanalysisagent](/Users/raphaeldelio/Documents/GitHub/stock-analysis-agent/stockanalysisagent)
+  This is the finished application. Use it as the reference implementation and runnable end state.
 
-## Provider Strategy
+The workshop is not separate from the real app in spirit.
 
-- market data: Twelve Data
-- fundamentals: SEC EDGAR / XBRL
-- news: hybrid SEC filings plus Tavily web search
-- technical analysis: Twelve Data time series with Java-calculated indicators
-- market data agent: now LLM-backed with Spring AI tools over the cached provider layer
-- fundamentals agent: now LLM-backed with Spring AI tools over the cached SEC provider layer
-- technical-analysis agent: now LLM-backed with Spring AI tools over the cached Twelve Data provider layer
-- news agent: now LLM-backed with Spring AI tools over the cached SEC-plus-Tavily provider layer
-- current runtime default: Twelve Data
-- current fundamentals default: SEC
-- current news default: SEC plus optional Tavily enrichment
-- current technical-analysis default: Twelve Data
-- test profile default: mock market data provider
+The idea of this repository is:
 
-If you want to force mock market data locally, use:
+- learn the architecture in the workshop
+- understand how the pieces fit together
+- compare that with the finished application
 
-```bash
-STOCK_ANALYSIS_MARKET_DATA_PROVIDER=mock
+## What You Will Learn
+
+By working through this repository, you will learn how to build a multi-agent application that can:
+
+- route a user request to the right specialist agents
+- run explicit orchestration in application code
+- synthesize a grounded final answer
+- preserve conversation memory
+- cache expensive or repeated work
+- emit useful traces for observability
+- evaluate answer quality with Spring AI
+
+This is not a generic “AI demo” repository.
+
+It is focused on one concrete system:
+
+a stock-analysis assistant that combines:
+
+- market data
+- fundamentals
+- news
+- technical analysis
+
+## The System You Are Building
+
+At a high level, the application works like this:
+
+```text
+user request
+    |
+    v
+coordinator
+    |
+    v
+orchestrator
+    |
+    +--> market data agent
+    +--> fundamentals agent
+    +--> news agent
+    +--> technical analysis agent
+    |
+    v
+synthesis agent
+    |
+    v
+final answer
 ```
 
-## Planning Docs
+As the repository progresses, that core flow is extended with:
 
-- `docs/workshop-plan.md` is the source of truth for milestone status, next steps, and deferred scope
-- `docs/workshop-instructions.md` holds the learner-facing workshop instructions that evolve with the implementation
-- `docs/workshop-checkpoints.md` maps the workshop into explicit checkpoints with learner scope and validation steps
-- `docs/facilitator-notes.md` captures local setup, live-demo guidance, and common failure modes
+- Redis-backed memory
+- semantic caching
+- observability
+- evaluation
 
-## Local Infrastructure
+So the goal is not just to “make several agents talk.”
 
-Redis is the current cache backend for external provider calls, and the same local stack now also runs Redis Agent Memory for the chat session.
+The goal is to show what it takes to turn a multi-agent system into a production-style application.
 
-Create a local `.env` file from [/.env.example](/Users/raphaeldelio/Documents/GitHub/stock-analysis-agent/.env.example) or export `OPENAI_API_KEY` in your shell, then start the local stack with:
+## If You Are Following the Workshop
+
+Go to:
+
+- [stockanalysisagentworkshop/README.md](/Users/raphaeldelio/Documents/GitHub/stock-analysis-agent/stockanalysisagentworkshop/README.md)
+
+That README is written for learners and walks you through the full sequence.
+
+You will move through the workshop in order:
+
+1. Spring AI basics
+2. multi-agent system design
+3. specialist agents
+4. coordinator and orchestration
+5. memory
+6. caching
+7. observability
+8. evaluation
+9. what comes next
+
+The workshop is designed so you do not have to invent the whole system architecture yourself.
+
+You will be told:
+
+- what file to open
+- what code to paste
+- why that code matters
+- what that code is doing in the multi-agent system
+
+## If You Want to Run the Finished App
+
+Go to:
+
+- [stockanalysisagent/README.md](/Users/raphaeldelio/Documents/GitHub/stock-analysis-agent/stockanalysisagent/README.md)
+
+The finished app is a Spring Boot application with a browser chat UI and a Redis-backed local stack.
+
+From the repository root, the most useful commands are:
+
+```bash
+./gradlew :stockanalysisagent:bootRun
+./gradlew :stockanalysisagent:test
+./gradlew :stockanalysisagent:compileJava
+```
+
+## Local Setup
+
+If you want to run the real application locally, you will usually want:
+
+- Redis
+- Agent Memory Server
+- Redis Insight
+- optionally Zipkin for tracing
+
+The repository already includes a local Docker stack in:
+
+- [compose.yaml](/Users/raphaeldelio/Documents/GitHub/stock-analysis-agent/compose.yaml)
+
+Start it with:
 
 ```bash
 docker compose up -d redis agent-memory-server redis-insight
 ```
 
-The repository includes [compose.yaml](/Users/raphaeldelio/Documents/GitHub/stock-analysis-agent/compose.yaml) for that setup.
-On first boot, `agent-memory-server` may need outbound network access to download tokenizer assets used for working-memory token calculations.
+If you also want tracing:
 
-## Local Config
+```bash
+docker compose up -d zipkin
+```
 
-For local development, you can keep secrets and per-machine settings in a git-ignored file at the repo root:
+## Local Configuration
 
-- [application-local.properties.example](/Users/raphaeldelio/Documents/GitHub/stock-analysis-agent/application-local.properties.example)
+For local secrets and machine-specific settings, use:
+
 - [/.env.example](/Users/raphaeldelio/Documents/GitHub/stock-analysis-agent/.env.example)
+- [application-local.properties.example](/Users/raphaeldelio/Documents/GitHub/stock-analysis-agent/application-local.properties.example)
 
-Create `application-local.properties` and add values like:
+Typical local values include:
 
-```properties
-spring.ai.openai.api-key=YOUR_OPENAI_KEY
-stock-analysis.market-data.twelve-data.api-key=YOUR_TWELVE_DATA_API_KEY
-stock-analysis.news.tavily.api-key=YOUR_TAVILY_API_KEY
-stock-analysis.sec.user-agent=stock-analysis-agent your-email@example.com
-agent-memory.server.url=http://localhost:8000
-```
+- `OPENAI_API_KEY`
+- Twelve Data API key
+- Tavily API key
+- SEC user agent
+- Agent Memory Server URL
 
-The app will load that file automatically if it exists.
-Docker Compose reads `.env`, so that is the right place for `OPENAI_API_KEY` when starting `agent-memory-server`.
-If you ever want to bypass Redis locally, you can set `spring.cache.type=simple`.
+The app loads `application-local.properties` automatically if it exists.
 
-## Non-Goals For The First Slice
+## Repository Map
 
-- UI
-- autonomous planning
-- generic agent framework abstractions
-- multiple model providers
-- Slack interfaces
+- [stockanalysisagentworkshop](/Users/raphaeldelio/Documents/GitHub/stock-analysis-agent/stockanalysisagentworkshop)
+  Learner-facing workshop materials and scaffolded code
 
-## Current Interfaces
+- [stockanalysisagent](/Users/raphaeldelio/Documents/GitHub/stock-analysis-agent/stockanalysisagent)
+  Finished application
 
-The active user-facing HTTP surface is the browser chat:
+- [compose.yaml](/Users/raphaeldelio/Documents/GitHub/stock-analysis-agent/compose.yaml)
+  Local Redis, Agent Memory Server, Redis Insight, and Zipkin stack
 
-- `GET /api/chat/context`
-- `POST /api/chat`
-- `DELETE /api/chat/session/{sessionId}`
+- [docs](/Users/raphaeldelio/Documents/GitHub/stock-analysis-agent/docs)
+  Supporting planning and project documentation
 
-Internally, the orchestration layer still uses `AnalysisRequest` and `AnalysisResponse` as its normalized input/output contract.
+## What Success Looks Like
 
-The primary workshop path is now the chat frontend:
+If you finish this repository path, you should be able to explain and build:
 
-- user messages go through a deterministic chat shell
-- memory is injected into the coordinator through Spring AI advisors
-- the browser chat calls the orchestration stack directly through the bounded stock-analysis tool
-- the underlying coordinator, specialized agents, and synthesis flow remain explicit application code
-- if Agent Memory has a transient write problem, the chat now keeps answering and degrades memory behavior instead of failing the whole turn
+- how Spring AI tools, prompts, and structured outputs work
+- how specialist agents are structured
+- how a coordinator decides what should run
+- how orchestration stays explicit in code
+- how Redis supports memory, caching, and scaling
+- how observability helps you understand multi-agent execution
+- how evaluation helps you measure answer quality
 
-When multiple specialized agents are selected, `SynthesisAgent` uses Spring AI to produce the final grounded response from the structured agent outputs. In test and no-model setups, it falls back to a deterministic synthesis so the workshop remains runnable.
-The orchestration layer dispatches agents dynamically from the execution plan and degrades cleanly when one selected agent fails.
-Independent agents fan out through `CompletableFuture` on a Spring-managed executor, while synthesis still waits for the selected analysis tasks to finish.
-External provider calls go through a Redis-backed cache layer so repeated market, SEC, and Tavily lookups are not triggered unnecessarily.
-`MarketDataAgent`, `FundamentalsAgent`, `TechnicalAnalysisAgent`, and `NewsAgent` are now tool-backed specialist agents that use Spring AI over the cached provider layer.
+That is the real outcome of this repository.
 
-## Frontend Mode
-
-You can test the current system through the memory-backed chat frontend:
-
-```bash
-./gradlew bootRun
-```
-
-Then open [http://localhost:8080](http://localhost:8080).
-
-The frontend starts a chat session and stores memory under a conversation id shaped like `userId:sessionId`.
-The chat layer uses:
-
-- Spring AI `MessageChatMemoryAdvisor` on the coordinator path for working memory
-- a custom `LongTermMemoryAdvisor` backed by Redis Agent Memory
-- a single stock-analysis entrypoint that delegates to the existing orchestration stack
-
-Use the `Clear chat` button to reset the current chat memory.
-
-To run the full local chat stack:
-
-```bash
-docker compose up -d redis agent-memory-server redis-insight
-./gradlew bootRun
-```
-
-Recommended chat prompts:
-
-- `What's the current price of Apple?`
-- `What about its fundamentals?`
-- `And any recent news?`
-- `What do the technicals look like?`
-- `Give me a full view with price, fundamentals, news, and technical analysis`
-
-You should not need to repeat `AAPL` once the conversation already established the company.
-If Agent Memory is temporarily unavailable, the chat should still answer, but follow-up context may be weaker until the memory service recovers.
-
-If you want to run the chat layer without the live Redis-backed provider cache, you can fall back to simple local caching:
-
-```bash
-SPRING_CACHE_TYPE=simple \
-./gradlew bootRun
-```
-
-`OPENAI_API_KEY` is the preferred env var for this repo. `SPRING_AI_OPENAI_API_KEY` also works.
-Environment variables still work, but `application-local.properties` plus `.env` is the simplest local setup.
-
-If you want to validate the workshop slice without model credentials, use:
-
-```bash
-./gradlew test
-```
-
-## Java 25 And Netty On macOS
-
-This project uses Reactor Netty transitively through Spring AI's WebClient support. On macOS with Java 25, you may otherwise see:
-
-- a restricted native-access warning from Netty
-- a fallback warning about `MacOSDnsServerAddressStreamProvider`
-
-The Gradle build already configures the required JVM flag for `bootRun` and `test`:
-
-```bash
---enable-native-access=ALL-UNNAMED
-```
-
-If you run the app outside Gradle, add the same JVM argument yourself.
-
-For IntelliJ IDEA:
-
-- open the Run/Debug configuration for the app
-- add `--enable-native-access=ALL-UNNAMED` in `VM options`
-
-For a packaged jar:
-
-```bash
-java --enable-native-access=ALL-UNNAMED -jar build/libs/stock-analysis-agent-0.0.1-SNAPSHOT.jar
-```
+Not just a demo that runs, but a clear mental model for how to build multi-agent systems that are useful, observable, and ready to grow.
