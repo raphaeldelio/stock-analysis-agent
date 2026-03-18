@@ -15,10 +15,15 @@ import com.redis.stockanalysisagent.agent.synthesisagent.SynthesisResult;
 import com.redis.stockanalysisagent.agent.technicalanalysisagent.TechnicalAnalysisAgent;
 import com.redis.stockanalysisagent.agent.technicalanalysisagent.TechnicalAnalysisResult;
 import com.redis.stockanalysisagent.agent.technicalanalysisagent.TechnicalAnalysisSnapshot;
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationRegistry;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
+
+import static com.redis.stockanalysisagent.observability.OrchestrationObservability.agentObservation;
+import static com.redis.stockanalysisagent.observability.OrchestrationObservability.enrichWithAgentExecution;
 
 @Service
 public class AgentOrchestrationService {
@@ -28,19 +33,22 @@ public class AgentOrchestrationService {
     private final NewsAgent newsAgent;
     private final TechnicalAnalysisAgent technicalAnalysisAgent;
     private final SynthesisAgent synthesisAgent;
+    private final ObservationRegistry observationRegistry;
 
     public AgentOrchestrationService(
             MarketDataAgent marketDataAgent,
             FundamentalsAgent fundamentalsAgent,
             NewsAgent newsAgent,
             TechnicalAnalysisAgent technicalAnalysisAgent,
-            SynthesisAgent synthesisAgent
+            SynthesisAgent synthesisAgent,
+            ObservationRegistry observationRegistry
     ) {
         this.marketDataAgent = marketDataAgent;
         this.fundamentalsAgent = fundamentalsAgent;
         this.newsAgent = newsAgent;
         this.technicalAnalysisAgent = technicalAnalysisAgent;
         this.synthesisAgent = synthesisAgent;
+        this.observationRegistry = observationRegistry;
     }
 
     public AnalysisResponse processRequest(AnalysisRequest request, ExecutionPlan executionPlan) {
@@ -57,48 +65,88 @@ public class AgentOrchestrationService {
 
             switch (agentType) {
                 case MARKET_DATA -> {
+                    Observation observation = agentObservation(observationRegistry, AgentType.MARKET_DATA).start();
                     long startedAt = System.nanoTime();
-                    MarketDataResult result = marketDataAgent.execute(request.ticker(), request.question());
-                    marketSnapshot = result.getFinalResponse();
-                    executions.add(new AgentExecution(
-                            AgentType.MARKET_DATA,
-                            result.getMessage(),
-                            elapsedDurationMs(startedAt),
-                            result.getTokenUsage()
-                    ));
+                    try {
+                        MarketDataResult result = marketDataAgent.execute(request.ticker(), request.question());
+                        marketSnapshot = result.getFinalResponse();
+                        AgentExecution execution = new AgentExecution(
+                                AgentType.MARKET_DATA,
+                                result.getMessage(),
+                                elapsedDurationMs(startedAt),
+                                result.getTokenUsage()
+                        );
+                        enrichWithAgentExecution(observation, execution);
+                        executions.add(execution);
+                    } catch (Throwable t) {
+                        observation.error(t);
+                        throw t;
+                    } finally {
+                        observation.stop();
+                    }
                 }
                 case FUNDAMENTALS -> {
+                    Observation observation = agentObservation(observationRegistry, AgentType.FUNDAMENTALS).start();
                     long startedAt = System.nanoTime();
-                    FundamentalsResult result = fundamentalsAgent.execute(request.ticker(), request.question(), marketSnapshot);
-                    fundamentalsSnapshot = result.getFinalResponse();
-                    executions.add(new AgentExecution(
-                            AgentType.FUNDAMENTALS,
-                            result.getMessage(),
-                            elapsedDurationMs(startedAt),
-                            result.getTokenUsage()
-                    ));
+                    try {
+                        FundamentalsResult result = fundamentalsAgent.execute(request.ticker(), request.question(), marketSnapshot);
+                        fundamentalsSnapshot = result.getFinalResponse();
+                        AgentExecution execution = new AgentExecution(
+                                AgentType.FUNDAMENTALS,
+                                result.getMessage(),
+                                elapsedDurationMs(startedAt),
+                                result.getTokenUsage()
+                        );
+                        enrichWithAgentExecution(observation, execution);
+                        executions.add(execution);
+                    } catch (Throwable t) {
+                        observation.error(t);
+                        throw t;
+                    } finally {
+                        observation.stop();
+                    }
                 }
                 case NEWS -> {
+                    Observation observation = agentObservation(observationRegistry, AgentType.NEWS).start();
                     long startedAt = System.nanoTime();
-                    NewsResult result = newsAgent.execute(request.ticker(), request.question());
-                    newsSnapshot = result.getFinalResponse();
-                    executions.add(new AgentExecution(
-                            AgentType.NEWS,
-                            result.getMessage(),
-                            elapsedDurationMs(startedAt),
-                            result.getTokenUsage()
-                    ));
+                    try {
+                        NewsResult result = newsAgent.execute(request.ticker(), request.question());
+                        newsSnapshot = result.getFinalResponse();
+                        AgentExecution execution = new AgentExecution(
+                                AgentType.NEWS,
+                                result.getMessage(),
+                                elapsedDurationMs(startedAt),
+                                result.getTokenUsage()
+                        );
+                        enrichWithAgentExecution(observation, execution);
+                        executions.add(execution);
+                    } catch (Throwable t) {
+                        observation.error(t);
+                        throw t;
+                    } finally {
+                        observation.stop();
+                    }
                 }
                 case TECHNICAL_ANALYSIS -> {
+                    Observation observation = agentObservation(observationRegistry, AgentType.TECHNICAL_ANALYSIS).start();
                     long startedAt = System.nanoTime();
-                    TechnicalAnalysisResult result = technicalAnalysisAgent.execute(request.ticker(), request.question());
-                    technicalAnalysisSnapshot = result.getFinalResponse();
-                    executions.add(new AgentExecution(
-                            AgentType.TECHNICAL_ANALYSIS,
-                            result.getMessage(),
-                            elapsedDurationMs(startedAt),
-                            result.getTokenUsage()
-                    ));
+                    try {
+                        TechnicalAnalysisResult result = technicalAnalysisAgent.execute(request.ticker(), request.question());
+                        technicalAnalysisSnapshot = result.getFinalResponse();
+                        AgentExecution execution = new AgentExecution(
+                                AgentType.TECHNICAL_ANALYSIS,
+                                result.getMessage(),
+                                elapsedDurationMs(startedAt),
+                                result.getTokenUsage()
+                        );
+                        enrichWithAgentExecution(observation, execution);
+                        executions.add(execution);
+                    } catch (Throwable t) {
+                        observation.error(t);
+                        throw t;
+                    } finally {
+                        observation.stop();
+                    }
                 }
                 case SYNTHESIS -> throw new IllegalStateException(
                         "Synthesis should execute only after the specialized agents finish."
@@ -106,22 +154,31 @@ public class AgentOrchestrationService {
             }
         }
 
+        Observation observation = agentObservation(observationRegistry, AgentType.SYNTHESIS).start();
         long synthesisStartedAt = System.nanoTime();
-        SynthesisResult synthesisResult = synthesisAgent.synthesize(
-                request,
-                marketSnapshot,
-                fundamentalsSnapshot,
-                newsSnapshot,
-                technicalAnalysisSnapshot
-        );
-        executions.add(new AgentExecution(
-                AgentType.SYNTHESIS,
-                "Synthesis completed.",
-                elapsedDurationMs(synthesisStartedAt),
-                synthesisResult.tokenUsage()
-        ));
-
-        return AnalysisResponse.completed(executions, synthesisResult.finalAnswer());
+        try {
+            SynthesisResult synthesisResult = synthesisAgent.synthesize(
+                    request,
+                    marketSnapshot,
+                    fundamentalsSnapshot,
+                    newsSnapshot,
+                    technicalAnalysisSnapshot
+            );
+            AgentExecution execution = new AgentExecution(
+                    AgentType.SYNTHESIS,
+                    "Synthesis completed.",
+                    elapsedDurationMs(synthesisStartedAt),
+                    synthesisResult.tokenUsage()
+            );
+            enrichWithAgentExecution(observation, execution);
+            executions.add(execution);
+            return AnalysisResponse.completed(executions, synthesisResult.finalAnswer());
+        } catch (Throwable t) {
+            observation.error(t);
+            throw t;
+        } finally {
+            observation.stop();
+        }
     }
 
     private long elapsedDurationMs(long startedAt) {

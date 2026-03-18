@@ -15,10 +15,15 @@ import com.redis.stockanalysisagent.agent.synthesisagent.SynthesisResult;
 import com.redis.stockanalysisagent.agent.technicalanalysisagent.TechnicalAnalysisAgent;
 import com.redis.stockanalysisagent.agent.technicalanalysisagent.TechnicalAnalysisResult;
 import com.redis.stockanalysisagent.agent.technicalanalysisagent.TechnicalAnalysisSnapshot;
+import io.micrometer.observation.Observation;
+import io.micrometer.observation.ObservationRegistry;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
+
+import static com.redis.stockanalysisagent.observability.OrchestrationObservability.agentObservation;
+import static com.redis.stockanalysisagent.observability.OrchestrationObservability.enrichWithAgentExecution;
 
 @Service
 public class AgentOrchestrationService {
@@ -28,19 +33,22 @@ public class AgentOrchestrationService {
     private final NewsAgent newsAgent;
     private final TechnicalAnalysisAgent technicalAnalysisAgent;
     private final SynthesisAgent synthesisAgent;
+    private final ObservationRegistry observationRegistry;
 
     public AgentOrchestrationService(
             MarketDataAgent marketDataAgent,
             FundamentalsAgent fundamentalsAgent,
             NewsAgent newsAgent,
             TechnicalAnalysisAgent technicalAnalysisAgent,
-            SynthesisAgent synthesisAgent
+            SynthesisAgent synthesisAgent,
+            ObservationRegistry observationRegistry
     ) {
         this.marketDataAgent = marketDataAgent;
         this.fundamentalsAgent = fundamentalsAgent;
         this.newsAgent = newsAgent;
         this.technicalAnalysisAgent = technicalAnalysisAgent;
         this.synthesisAgent = synthesisAgent;
+        this.observationRegistry = observationRegistry;
     }
 
     public AnalysisResponse processRequest(AnalysisRequest request, ExecutionPlan executionPlan) {
