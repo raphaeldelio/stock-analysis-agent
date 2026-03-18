@@ -1,5 +1,6 @@
 package com.redis.stockanalysisagent.agent.technicalanalysisagent;
 
+import com.redis.stockanalysisagent.agent.orchestration.TokenUsageSummary;
 import com.redis.stockanalysisagent.providers.twelvedata.TwelveDataTechnicalAnalysisProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,11 +36,13 @@ public class TechnicalAnalysisAgent {
                     .user(buildPrompt(ticker, question))
                     .call()
                     .responseEntity(TechnicalAnalysisResult.class);
+            TokenUsageSummary tokenUsage = TokenUsageSummary.from(response.response());
 
             TechnicalAnalysisResult entity = response.entity();
             if (entity == null || entity.getFinalResponse() == null || entity.getFinishReason() != TechnicalAnalysisResult.FinishReason.COMPLETED) {
-                return fallbackResult(ticker);
+                return fallbackResult(ticker, tokenUsage);
             }
+            entity.setTokenUsage(tokenUsage);
 
             if (entity.getMessage() == null || entity.getMessage().isBlank()) {
                 entity.setMessage(defaultDirectAnswer(entity.getFinalResponse()));
@@ -57,8 +60,14 @@ public class TechnicalAnalysisAgent {
     }
 
     private TechnicalAnalysisResult fallbackResult(String ticker) {
+        return fallbackResult(ticker, null);
+    }
+
+    private TechnicalAnalysisResult fallbackResult(String ticker, TokenUsageSummary tokenUsage) {
         TechnicalAnalysisSnapshot snapshot = technicalAnalysisProvider.fetchSnapshot(ticker);
-        return TechnicalAnalysisResult.completed(defaultDirectAnswer(snapshot), snapshot);
+        TechnicalAnalysisResult result = TechnicalAnalysisResult.completed(defaultDirectAnswer(snapshot), snapshot);
+        result.setTokenUsage(tokenUsage);
+        return result;
     }
 
     private String buildPrompt(String ticker, String question) {

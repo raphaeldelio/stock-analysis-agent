@@ -1,6 +1,13 @@
 spring:
   application:
     name: stock-analysis-agent
+  web:
+    resources:
+      cache:
+        cachecontrol:
+          no-store: true
+          no-cache: true
+          must-revalidate: true
   cache:
     type: ${SPRING_CACHE_TYPE:redis}
   config:

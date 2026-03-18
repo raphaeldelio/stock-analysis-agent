@@ -667,6 +667,21 @@ body::before {
     flex: 0 0 auto;
 }
 
+.badge--tokens {
+    background: rgba(244, 114, 182, 0.12);
+    border-color: rgba(244, 114, 182, 0.26);
+    color: #f9a8d4;
+    font-family: var(--font-family-mono);
+}
+
+.message__token-breakdown {
+    margin: 0;
+    color: var(--color-text-secondary);
+    font-family: var(--font-family-mono);
+    font-size: 0.78rem;
+    line-height: 1.5;
+}
+
 .limitation {
     display: inline-flex;
     padding: 0.35rem 0.65rem;

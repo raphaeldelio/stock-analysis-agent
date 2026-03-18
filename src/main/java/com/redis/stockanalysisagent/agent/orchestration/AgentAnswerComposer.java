@@ -8,6 +8,7 @@ import com.redis.stockanalysisagent.agent.marketdataagent.MarketSnapshot;
 import com.redis.stockanalysisagent.agent.newsagent.NewsAgent;
 import com.redis.stockanalysisagent.agent.newsagent.NewsSnapshot;
 import com.redis.stockanalysisagent.agent.synthesisagent.SynthesisAgent;
+import com.redis.stockanalysisagent.agent.synthesisagent.SynthesisResult;
 import com.redis.stockanalysisagent.agent.technicalanalysisagent.TechnicalAnalysisAgent;
 import com.redis.stockanalysisagent.agent.technicalanalysisagent.TechnicalAnalysisSnapshot;
 import org.springframework.stereotype.Component;
@@ -46,7 +47,7 @@ class AgentAnswerComposer {
 
         if (state.hasStructuredOutputs()) {
             long synthesisStartedAt = System.nanoTime();
-            String synthesizedAnswer = synthesisAgent.synthesize(
+            SynthesisResult synthesisResult = synthesisAgent.synthesize(
                     request,
                     executionPlan,
                     structuredOutput(state, AgentType.MARKET_DATA, MarketSnapshot.class),
@@ -59,10 +60,11 @@ class AgentAnswerComposer {
             state.addExecution(completedExecution(
                     AgentType.SYNTHESIS,
                     elapsedDurationMs(synthesisStartedAt),
-                    synthesisSummary(state)
+                    synthesisSummary(state),
+                    synthesisResult.tokenUsage()
             ));
 
-            return synthesizedAnswer;
+            return synthesisResult.finalAnswer();
         }
 
         if (executionPlan.requiresSynthesis()) {
@@ -70,7 +72,8 @@ class AgentAnswerComposer {
                     AgentType.SYNTHESIS,
                     AgentExecutionStatus.SKIPPED,
                     "Synthesis skipped.",
-                    0
+                    0,
+                    null
             ));
         }
 
@@ -143,12 +146,18 @@ class AgentAnswerComposer {
         return fallback.apply(output);
     }
 
-    private AgentExecution completedExecution(AgentType agentType, long durationMs, String summary) {
+    private AgentExecution completedExecution(
+            AgentType agentType,
+            long durationMs,
+            String summary,
+            TokenUsageSummary tokenUsage
+    ) {
         return new AgentExecution(
                 agentType,
                 AgentExecutionStatus.COMPLETED,
                 normalizeSummary(summary, "%s completed.".formatted(agentLabel(agentType))),
-                durationMs
+                durationMs,
+                tokenUsage
         );
     }
 

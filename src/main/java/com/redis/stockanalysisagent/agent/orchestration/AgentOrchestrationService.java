@@ -169,7 +169,8 @@ public class AgentOrchestrationService {
                                     marketDataResult.getMessage(),
                                     "Processed the latest quote, previous close, and recent price movement for %s."
                                             .formatted(request.ticker().toUpperCase())
-                            )
+                            ),
+                            marketDataResult.getTokenUsage()
                     ),
                     marketDataResult.getFinalResponse(),
                     marketDataResult.getMessage()
@@ -193,7 +194,8 @@ public class AgentOrchestrationService {
                             summarizeOutcome(
                                     fundamentalsResult.getMessage(),
                                     "Processed the fundamentals snapshot, including revenue, margins, debt, cash, and valuation context."
-                            )
+                            ),
+                            fundamentalsResult.getTokenUsage()
                     ),
                     fundamentalsResult.getFinalResponse(),
                     fundamentalsResult.getMessage()
@@ -215,7 +217,8 @@ public class AgentOrchestrationService {
                                     newsResult.getMessage(),
                                     "Processed recent SEC filings and relevant web news for %s."
                                             .formatted(request.ticker().toUpperCase())
-                            )
+                            ),
+                            newsResult.getTokenUsage()
                     ),
                     newsResult.getFinalResponse(),
                     newsResult.getMessage()
@@ -237,7 +240,8 @@ public class AgentOrchestrationService {
                                     technicalAnalysisResult.getMessage(),
                                     "Processed the latest close, moving averages, RSI, and trend signals for %s."
                                             .formatted(request.ticker().toUpperCase())
-                            )
+                            ),
+                            technicalAnalysisResult.getTokenUsage()
                     ),
                     technicalAnalysisResult.getFinalResponse(),
                     technicalAnalysisResult.getMessage()
@@ -283,12 +287,18 @@ public class AgentOrchestrationService {
         };
     }
 
-    private AgentExecution completedExecution(AgentType agentType, long durationMs, String summary) {
+    private AgentExecution completedExecution(
+            AgentType agentType,
+            long durationMs,
+            String summary,
+            TokenUsageSummary tokenUsage
+    ) {
         return new AgentExecution(
                 agentType,
                 AgentExecutionStatus.COMPLETED,
                 normalizeSummary(summary, "%s completed.".formatted(agentLabel(agentType))),
-                durationMs
+                durationMs,
+                tokenUsage
         );
     }
 
@@ -297,7 +307,8 @@ public class AgentOrchestrationService {
                 agentType,
                 AgentExecutionStatus.FAILED,
                 "%s failed: %s".formatted(agentLabel(agentType), error),
-                durationMs
+                durationMs,
+                null
         );
     }
 

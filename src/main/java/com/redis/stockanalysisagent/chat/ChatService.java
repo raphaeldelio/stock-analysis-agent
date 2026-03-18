@@ -1,5 +1,6 @@
 package com.redis.stockanalysisagent.chat;
 
+import com.redis.stockanalysisagent.agent.orchestration.TokenUsageSummary;
 import com.redis.stockanalysisagent.memory.AmsChatMemoryRepository;
 import com.redis.stockanalysisagent.semanticcache.SemanticAnalysisCache;
 import org.slf4j.Logger;
@@ -51,11 +52,13 @@ public class ChatService {
                     cachedResponse.get(),
                     List.of(),
                     true,
+                    null,
                     List.of(systemStep(
                             SEMANTIC_CACHE,
                             "Semantic cache",
                             semanticCacheDurationMs,
-                            "Found a reusable response in the semantic cache and returned it directly."
+                            "Found a reusable response in the semantic cache and returned it directly.",
+                            null
                     ))
             );
         }
@@ -63,7 +66,8 @@ public class ChatService {
                 SEMANTIC_CACHE,
                 "Semantic cache",
                 semanticCacheDurationMs,
-                "Checked the semantic cache and found no reusable response."
+                "Checked the semantic cache and found no reusable response.",
+                null
         ));
 
         ChatRunner.AnalysisTurn analysisTurn = chatRunner.analyze(normalizedMessage, conversationId);
@@ -78,7 +82,8 @@ public class ChatService {
                 "TURN_SAVE",
                 "Turn save",
                 elapsedDurationMs(saveTurnStartedAt),
-                turnSaveSummary(saveSucceeded)
+                turnSaveSummary(saveSucceeded),
+                null
         ));
 
         return new ChatTurn(
@@ -86,6 +91,7 @@ public class ChatService {
                 analysisTurn.response(),
                 memoryRepository.getLastRetrievedMemories(),
                 false,
+                analysisTurn.tokenUsage(),
                 List.copyOf(executionSteps)
         );
     }
@@ -109,8 +115,14 @@ public class ChatService {
         }
     }
 
-    private ChatExecutionStep systemStep(String id, String label, long durationMs, String summary) {
-        return new ChatExecutionStep(id, label, KIND_SYSTEM, durationMs, summary);
+    private ChatExecutionStep systemStep(
+            String id,
+            String label,
+            long durationMs,
+            String summary,
+            TokenUsageSummary tokenUsage
+    ) {
+        return new ChatExecutionStep(id, label, KIND_SYSTEM, durationMs, summary, tokenUsage);
     }
 
     private long elapsedDurationMs(long startedAt) {
@@ -128,6 +140,7 @@ public class ChatService {
             String response,
             List<String> retrievedMemories,
             boolean fromSemanticCache,
+            TokenUsageSummary tokenUsage,
             List<ChatExecutionStep> executionSteps
     ) {
     }

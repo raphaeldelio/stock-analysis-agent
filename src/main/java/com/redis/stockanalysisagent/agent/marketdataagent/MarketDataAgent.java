@@ -1,5 +1,6 @@
 package com.redis.stockanalysisagent.agent.marketdataagent;
 
+import com.redis.stockanalysisagent.agent.orchestration.TokenUsageSummary;
 import com.redis.stockanalysisagent.providers.twelvedata.TwelveDataMarketDataProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,11 +36,13 @@ public class MarketDataAgent {
                     .user(buildPrompt(ticker, question))
                     .call()
                     .responseEntity(MarketDataResult.class);
+            TokenUsageSummary tokenUsage = TokenUsageSummary.from(response.response());
 
             MarketDataResult entity = response.entity();
             if (entity == null || entity.getFinalResponse() == null || entity.getFinishReason() != MarketDataResult.FinishReason.COMPLETED) {
-                return fallbackResult(ticker);
+                return fallbackResult(ticker, tokenUsage);
             }
+            entity.setTokenUsage(tokenUsage);
 
             if (entity.getMessage() == null || entity.getMessage().isBlank()) {
                 entity.setMessage(defaultDirectAnswer(entity.getFinalResponse()));
@@ -57,8 +60,14 @@ public class MarketDataAgent {
     }
 
     private MarketDataResult fallbackResult(String ticker) {
+        return fallbackResult(ticker, null);
+    }
+
+    private MarketDataResult fallbackResult(String ticker, TokenUsageSummary tokenUsage) {
         MarketSnapshot snapshot = marketDataProvider.fetchSnapshot(ticker);
-        return MarketDataResult.completed(defaultDirectAnswer(snapshot), snapshot);
+        MarketDataResult result = MarketDataResult.completed(defaultDirectAnswer(snapshot), snapshot);
+        result.setTokenUsage(tokenUsage);
+        return result;
     }
 
     private String buildPrompt(String ticker, String question) {

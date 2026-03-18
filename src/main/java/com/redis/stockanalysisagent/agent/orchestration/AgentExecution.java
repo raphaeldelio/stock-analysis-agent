@@ -4,6 +4,7 @@ public record AgentExecution(
         AgentType agentType,
         AgentExecutionStatus status,
         String summary,
-        long durationMs
+        long durationMs,
+        TokenUsageSummary tokenUsage
 ) {
 }

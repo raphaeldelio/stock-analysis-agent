@@ -1,5 +1,6 @@
 package com.redis.stockanalysisagent.agent.coordinatoragent;
 
+import com.redis.stockanalysisagent.agent.orchestration.TokenUsageSummary;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ResponseEntity;
 import org.springframework.ai.chat.model.ChatResponse;
@@ -14,7 +15,7 @@ public class CoordinatorRoutingAgent {
         this.coordinatorChatClient = coordinatorChatClient;
     }
 
-    public RoutingDecision route(String userMessage, String conversationId) {
+    public RoutingResult route(String userMessage, String conversationId) {
         ResponseEntity<ChatResponse, RoutingDecision> response = coordinatorChatClient
                 .prompt()
                 .user(userMessage)
@@ -27,6 +28,12 @@ public class CoordinatorRoutingAgent {
             throw new IllegalStateException("Coordinator routing returned an empty response.");
         }
 
-        return decision;
+        return new RoutingResult(decision, TokenUsageSummary.from(response.response()));
+    }
+
+    public record RoutingResult(
+            RoutingDecision routingDecision,
+            TokenUsageSummary tokenUsage
+    ) {
     }
 }

@@ -8,6 +8,7 @@ import com.redis.stockanalysisagent.agent.orchestration.AgentOrchestrationServic
 import com.redis.stockanalysisagent.agent.orchestration.AgentType;
 import com.redis.stockanalysisagent.agent.orchestration.AnalysisRequest;
 import com.redis.stockanalysisagent.agent.orchestration.AnalysisResponse;
+import com.redis.stockanalysisagent.agent.orchestration.TokenUsageSummary;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -32,21 +33,33 @@ class ChatRunner {
 
     AnalysisTurn analyze(String request, String conversationId) {
         long coordinatorStartedAt = System.nanoTime();
-        RoutingDecision routingDecision = coordinatorAgent.execute(request, conversationId);
+        CoordinatorAgent.RoutingOutcome routingOutcome = coordinatorAgent.executeWithMetadata(request, conversationId);
+        RoutingDecision routingDecision = routingOutcome.routingDecision();
         List<ChatExecutionStep> executionSteps = new ArrayList<>();
         executionSteps.add(agentStep(
                 COORDINATOR,
                 "Coordinator",
                 elapsedDurationMs(coordinatorStartedAt),
-                coordinatorSummary(routingDecision)
+                coordinatorSummary(routingDecision),
+                routingOutcome.tokenUsage()
         ));
 
         if (routingDecision.getFinishReason() == RoutingDecision.FinishReason.NEEDS_MORE_INPUT) {
-            return new AnalysisTurn(routingDecision.getNextPrompt(), List.copyOf(executionSteps), false);
+            return new AnalysisTurn(
+                    routingDecision.getNextPrompt(),
+                    List.copyOf(executionSteps),
+                    false,
+                    TokenUsageSummary.sum(executionSteps.stream().map(ChatExecutionStep::tokenUsage).toList())
+            );
         }
 
         if (routingDecision.getFinishReason() != RoutingDecision.FinishReason.COMPLETED) {
-            return new AnalysisTurn(resolveCoordinatorMessage(routingDecision), List.copyOf(executionSteps), false);
+            return new AnalysisTurn(
+                    resolveCoordinatorMessage(routingDecision),
+                    List.copyOf(executionSteps),
+                    false,
+                    TokenUsageSummary.sum(executionSteps.stream().map(ChatExecutionStep::tokenUsage).toList())
+            );
         }
 
         AnalysisRequest analysisRequest = coordinatorAgent.toAnalysisRequest(routingDecision);
@@ -56,7 +69,8 @@ class ChatRunner {
         return new AnalysisTurn(
                 renderAnalysis(response),
                 List.copyOf(executionSteps),
-                response.limitations().isEmpty()
+                response.limitations().isEmpty(),
+                TokenUsageSummary.sum(executionSteps.stream().map(ChatExecutionStep::tokenUsage).toList())
         );
     }
 
@@ -97,12 +111,19 @@ class ChatRunner {
                 agentExecution.agentType().name(),
                 formatAgentLabel(agentExecution.agentType()),
                 agentExecution.durationMs(),
-                agentExecution.summary()
+                agentExecution.summary(),
+                agentExecution.tokenUsage()
         );
     }
 
-    private ChatExecutionStep agentStep(String id, String label, long durationMs, String summary) {
-        return new ChatExecutionStep(id, label, KIND_AGENT, durationMs, summary);
+    private ChatExecutionStep agentStep(
+            String id,
+            String label,
+            long durationMs,
+            String summary,
+            TokenUsageSummary tokenUsage
+    ) {
+        return new ChatExecutionStep(id, label, KIND_AGENT, durationMs, summary, tokenUsage);
     }
 
     private String coordinatorSummary(RoutingDecision routingDecision) {
@@ -169,7 +190,8 @@ class ChatRunner {
     record AnalysisTurn(
             String response,
             List<ChatExecutionStep> executionSteps,
-            boolean cacheable
+            boolean cacheable,
+            TokenUsageSummary tokenUsage
     ) {
     }
 }

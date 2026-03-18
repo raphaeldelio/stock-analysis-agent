@@ -2,6 +2,7 @@ package com.redis.stockanalysisagent.agent.coordinatoragent;
 
 import com.redis.stockanalysisagent.agent.orchestration.AgentType;
 import com.redis.stockanalysisagent.agent.orchestration.AnalysisRequest;
+import com.redis.stockanalysisagent.agent.orchestration.TokenUsageSummary;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -52,15 +53,20 @@ public class CoordinatorAgent {
     }
 
     public RoutingDecision execute(String userMessage, String conversationId) {
+        return executeWithMetadata(userMessage, conversationId).routingDecision();
+    }
+
+    public RoutingOutcome executeWithMetadata(String userMessage, String conversationId) {
+        CoordinatorRoutingAgent.RoutingResult routingResult = coordinatorRoutingAgent.route(userMessage, conversationId);
         RoutingDecision routingDecision = normalizeRoutingDecision(
-                coordinatorRoutingAgent.route(userMessage, conversationId),
+                routingResult.routingDecision(),
                 null,
                 null
         );
         if (routingDecision.getFinishReason() == RoutingDecision.FinishReason.NEEDS_MORE_INPUT) {
             routingDecision.setConversationId(conversationId);
         }
-        return routingDecision;
+        return new RoutingOutcome(routingDecision, routingResult.tokenUsage());
     }
 
     public AnalysisRequest toAnalysisRequest(RoutingDecision routingDecision) {
@@ -151,5 +157,11 @@ public class CoordinatorAgent {
                 "I couldn't determine a valid stock-analysis plan for that request. " +
                         "Please mention the company or ticker and the kind of analysis you want."
         );
+    }
+
+    public record RoutingOutcome(
+            RoutingDecision routingDecision,
+            TokenUsageSummary tokenUsage
+    ) {
     }
 }

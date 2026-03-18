@@ -1,5 +1,7 @@
 package com.redis.stockanalysisagent.agent.marketdataagent;
 
+import com.redis.stockanalysisagent.agent.orchestration.TokenUsageSummary;
+
 public class MarketDataResult {
 
     public enum FinishReason {
@@ -10,6 +12,7 @@ public class MarketDataResult {
     private FinishReason finishReason;
     private String message;
     private MarketSnapshot finalResponse;
+    private TokenUsageSummary tokenUsage;
 
     public MarketDataResult() {
     }
@@ -54,5 +57,13 @@ public class MarketDataResult {
 
     public void setFinalResponse(MarketSnapshot finalResponse) {
         this.finalResponse = finalResponse;
+    }
+
+    public TokenUsageSummary getTokenUsage() {
+        return tokenUsage;
+    }
+
+    public void setTokenUsage(TokenUsageSummary tokenUsage) {
+        this.tokenUsage = tokenUsage;
     }
 }

@@ -1,5 +1,6 @@
 package com.redis.stockanalysisagent.agent.newsagent;
 
+import com.redis.stockanalysisagent.agent.orchestration.TokenUsageSummary;
 import com.redis.stockanalysisagent.agent.tools.NewsTools;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,11 +30,13 @@ public class NewsAgent {
                     .user(buildPrompt(ticker, question))
                     .call()
                     .responseEntity(NewsResult.class);
+            TokenUsageSummary tokenUsage = TokenUsageSummary.from(response.response());
 
             NewsResult entity = response.entity();
             if (entity == null || entity.getFinalResponse() == null || entity.getFinishReason() != NewsResult.FinishReason.COMPLETED) {
-                return fallbackResult(ticker, question);
+                return fallbackResult(ticker, question, tokenUsage);
             }
+            entity.setTokenUsage(tokenUsage);
 
             if (entity.getMessage() == null || entity.getMessage().isBlank()) {
                 entity.setMessage(createDirectAnswer(entity.getFinalResponse()));
@@ -88,8 +91,14 @@ public class NewsAgent {
     }
 
     private NewsResult fallbackResult(String ticker, String question) {
+        return fallbackResult(ticker, question, null);
+    }
+
+    private NewsResult fallbackResult(String ticker, String question, TokenUsageSummary tokenUsage) {
         NewsSnapshot snapshot = newsTools.fetchNewsSnapshot(ticker, question);
-        return NewsResult.completed(createDirectAnswer(snapshot), snapshot);
+        NewsResult result = NewsResult.completed(createDirectAnswer(snapshot), snapshot);
+        result.setTokenUsage(tokenUsage);
+        return result;
     }
 
     private String buildPrompt(String ticker, String question) {

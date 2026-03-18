@@ -105,6 +105,7 @@
                 timestamp: new Date().toISOString(),
                 memories: response.retrievedMemories || [],
                 fromSemanticCache: Boolean(response.fromSemanticCache),
+                tokenUsage: normalizeTokenUsage(response.tokenUsage),
                 executionSteps: Array.isArray(response.executionSteps) ? response.executionSteps : [],
                 responseTimeMs: Number.isFinite(response.responseTimeMs) ? response.responseTimeMs : null
             });
@@ -269,7 +270,8 @@
         const meta = document.createElement("div");
         meta.className = "message__meta";
 
-        if (message.fromSemanticCache || message.responseTimeMs != null) {
+        const tokenUsage = resolveTokenUsage(message);
+        if (message.fromSemanticCache || message.responseTimeMs != null || tokenUsage) {
             const badges = document.createElement("div");
             badges.className = "message__badges";
 
@@ -285,6 +287,13 @@
                 durationBadge.className = "badge badge--timing";
                 durationBadge.textContent = formatDuration(message.responseTimeMs);
                 badges.appendChild(durationBadge);
+            }
+
+            if (tokenUsage) {
+                const tokenBadge = document.createElement("span");
+                tokenBadge.className = "badge badge--tokens";
+                tokenBadge.textContent = formatTokenBadge(tokenUsage);
+                badges.appendChild(tokenBadge);
             }
 
             meta.appendChild(badges);
@@ -351,6 +360,14 @@
 
                 row.appendChild(heading);
 
+                const stepTokenUsage = resolveTokenUsage(step);
+                if (stepTokenUsage) {
+                    const tokenBadge = document.createElement("span");
+                    tokenBadge.className = "badge badge--tokens badge--timing-inline";
+                    tokenBadge.textContent = formatTokenBadge(stepTokenUsage);
+                    row.appendChild(tokenBadge);
+                }
+
                 const durationMs = resolveStepDuration(step);
                 if (durationMs != null) {
                     const timingBadge = document.createElement("span");
@@ -362,7 +379,7 @@
                 item.appendChild(row);
 
                 const summary = resolveStepSummary(step);
-                if (summary) {
+                if (summary || stepTokenUsage) {
                     const details = document.createElement("details");
                     details.className = "message__subdisclosure";
 
@@ -373,7 +390,15 @@
 
                     const body = document.createElement("div");
                     body.className = "message__subdisclosure-body";
-                    renderMarkdownContent(body, summary);
+                    if (stepTokenUsage) {
+                        const tokenBreakdown = document.createElement("p");
+                        tokenBreakdown.className = "message__token-breakdown";
+                        tokenBreakdown.textContent = formatTokenBreakdown(stepTokenUsage);
+                        body.appendChild(tokenBreakdown);
+                    }
+                    if (summary) {
+                        renderMarkdownContent(body, summary);
+                    }
                     details.appendChild(body);
 
                     item.appendChild(details);
@@ -679,6 +704,44 @@
         return (durationMs / 1000).toFixed(durationMs >= 10_000 ? 0 : 1) + " s";
     }
 
+    function formatTokenBadge(tokenUsage) {
+        const totalTokens = resolveTokenCount(tokenUsage && tokenUsage.totalTokens);
+        if (totalTokens != null) {
+            return totalTokens + " tok";
+        }
+
+        const promptTokens = resolveTokenCount(tokenUsage && tokenUsage.promptTokens);
+        const completionTokens = resolveTokenCount(tokenUsage && tokenUsage.completionTokens);
+        const fallbackTotal = [promptTokens, completionTokens].filter(function (value) {
+            return value != null;
+        }).reduce(function (sum, value) {
+            return sum + value;
+        }, 0);
+
+        return fallbackTotal + " tok";
+    }
+
+    function formatTokenBreakdown(tokenUsage) {
+        const parts = [];
+        const promptTokens = resolveTokenCount(tokenUsage && tokenUsage.promptTokens);
+        const completionTokens = resolveTokenCount(tokenUsage && tokenUsage.completionTokens);
+        const totalTokens = resolveTokenCount(tokenUsage && tokenUsage.totalTokens);
+
+        if (promptTokens != null) {
+            parts.push("Prompt: " + promptTokens);
+        }
+
+        if (completionTokens != null) {
+            parts.push("Completion: " + completionTokens);
+        }
+
+        if (totalTokens != null) {
+            parts.push("Total: " + totalTokens);
+        }
+
+        return "Token usage: " + parts.join(" • ");
+    }
+
     function hydrateSessionId() {
         try {
             const savedSessionId = window.localStorage.getItem(sessionStorageKey);
@@ -767,6 +830,37 @@
         }
 
         return null;
+    }
+
+    function resolveTokenUsage(value) {
+        if (!value || typeof value !== "object") {
+            return null;
+        }
+
+        const tokenSource = value.tokenUsage && typeof value.tokenUsage === "object"
+            ? value.tokenUsage
+            : value;
+
+        const promptTokens = resolveTokenCount(tokenSource.promptTokens);
+        const completionTokens = resolveTokenCount(tokenSource.completionTokens);
+        const totalTokens = resolveTokenCount(tokenSource.totalTokens);
+        if (promptTokens == null && completionTokens == null && totalTokens == null) {
+            return null;
+        }
+
+        return {
+            promptTokens: promptTokens,
+            completionTokens: completionTokens,
+            totalTokens: totalTokens
+        };
+    }
+
+    function normalizeTokenUsage(value) {
+        return resolveTokenUsage(value);
+    }
+
+    function resolveTokenCount(value) {
+        return Number.isFinite(value) ? value : null;
     }
 
     function formatStepKind(kind) {

@@ -1,6 +1,7 @@
 package com.redis.stockanalysisagent.agent.fundamentalsagent;
 
 import com.redis.stockanalysisagent.agent.marketdataagent.MarketSnapshot;
+import com.redis.stockanalysisagent.agent.orchestration.TokenUsageSummary;
 import com.redis.stockanalysisagent.providers.sec.SecFundamentalsProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -48,11 +49,13 @@ public class FundamentalsAgent {
                     .user(buildPrompt(ticker, question, marketSnapshot))
                     .call()
                     .responseEntity(FundamentalsResult.class);
+            TokenUsageSummary tokenUsage = TokenUsageSummary.from(response.response());
 
             FundamentalsResult entity = response.entity();
             if (entity == null || entity.getFinalResponse() == null || entity.getFinishReason() != FundamentalsResult.FinishReason.COMPLETED) {
-                return fallbackResult(ticker, marketSnapshot);
+                return fallbackResult(ticker, marketSnapshot, tokenUsage);
             }
+            entity.setTokenUsage(tokenUsage);
 
             if (entity.getMessage() == null || entity.getMessage().isBlank()) {
                 entity.setMessage(defaultDirectAnswer(entity.getFinalResponse()));
@@ -70,8 +73,18 @@ public class FundamentalsAgent {
     }
 
     private FundamentalsResult fallbackResult(String ticker, Optional<MarketSnapshot> marketSnapshot) {
+        return fallbackResult(ticker, marketSnapshot, null);
+    }
+
+    private FundamentalsResult fallbackResult(
+            String ticker,
+            Optional<MarketSnapshot> marketSnapshot,
+            TokenUsageSummary tokenUsage
+    ) {
         FundamentalsSnapshot snapshot = fundamentalsProvider.fetchSnapshot(ticker, marketSnapshot);
-        return FundamentalsResult.completed(defaultDirectAnswer(snapshot), snapshot);
+        FundamentalsResult result = FundamentalsResult.completed(defaultDirectAnswer(snapshot), snapshot);
+        result.setTokenUsage(tokenUsage);
+        return result;
     }
 
     private String buildPrompt(String ticker, String question, Optional<MarketSnapshot> marketSnapshot) {

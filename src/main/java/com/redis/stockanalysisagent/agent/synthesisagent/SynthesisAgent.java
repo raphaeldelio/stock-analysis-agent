@@ -4,6 +4,7 @@ import com.redis.stockanalysisagent.agent.orchestration.AgentExecution;
 import com.redis.stockanalysisagent.agent.orchestration.AgentExecutionStatus;
 import com.redis.stockanalysisagent.agent.orchestration.AgentType;
 import com.redis.stockanalysisagent.agent.orchestration.AnalysisRequest;
+import com.redis.stockanalysisagent.agent.orchestration.TokenUsageSummary;
 import com.redis.stockanalysisagent.agent.coordinatoragent.ExecutionPlan;
 import com.redis.stockanalysisagent.agent.fundamentalsagent.FundamentalsSnapshot;
 import com.redis.stockanalysisagent.agent.marketdataagent.MarketSnapshot;
@@ -34,7 +35,7 @@ public class SynthesisAgent {
         this.synthesisChatClient = synthesisChatClient;
     }
 
-    public String synthesize(
+    public SynthesisResult synthesize(
             AnalysisRequest request,
             ExecutionPlan executionPlan,
             MarketSnapshot marketSnapshot,
@@ -56,28 +57,33 @@ public class SynthesisAgent {
 
             SynthesisResponse entity = response.entity();
             if (entity == null || entity.finalAnswer() == null || entity.finalAnswer().isBlank()) {
-                return fallbackAnswer(
+                return fallbackResult(
                         request,
                         marketSnapshot,
                         fundamentalsSnapshot,
                         newsSnapshot,
                         technicalAnalysisSnapshot,
                         agentExecutions,
-                        pendingAgents
+                        pendingAgents,
+                        TokenUsageSummary.from(response.response())
                 );
             }
 
-            return appendPendingContext(entity.finalAnswer().trim(), agentExecutions, pendingAgents);
+            return new SynthesisResult(
+                    appendPendingContext(entity.finalAnswer().trim(), agentExecutions, pendingAgents),
+                    TokenUsageSummary.from(response.response())
+            );
         } catch (RuntimeException ex) {
             log.warn("Falling back to deterministic synthesis because the model-backed synthesis failed.", ex);
-            return fallbackAnswer(
+            return fallbackResult(
                     request,
                     marketSnapshot,
                     fundamentalsSnapshot,
                     newsSnapshot,
                     technicalAnalysisSnapshot,
                     agentExecutions,
-                    pendingAgents
+                    pendingAgents,
+                    null
             );
         }
     }
@@ -131,14 +137,15 @@ public class SynthesisAgent {
         );
     }
 
-    private String fallbackAnswer(
+    private SynthesisResult fallbackResult(
             AnalysisRequest request,
             MarketSnapshot marketSnapshot,
             FundamentalsSnapshot fundamentalsSnapshot,
             NewsSnapshot newsSnapshot,
             TechnicalAnalysisSnapshot technicalAnalysisSnapshot,
             List<AgentExecution> agentExecutions,
-            long pendingAgents
+            long pendingAgents,
+            TokenUsageSummary tokenUsage
     ) {
         String baseAnswer = buildFallbackBaseAnswer(
                 request,
@@ -149,10 +156,13 @@ public class SynthesisAgent {
         );
 
         if (pendingAgents == 0) {
-            return baseAnswer;
+            return new SynthesisResult(baseAnswer, tokenUsage);
         }
 
-        return appendPendingContext(baseAnswer, agentExecutions, pendingAgents);
+        return new SynthesisResult(
+                appendPendingContext(baseAnswer, agentExecutions, pendingAgents),
+                tokenUsage
+        );
     }
 
     private String appendPendingContext(String baseAnswer, List<AgentExecution> agentExecutions, long pendingAgents) {
