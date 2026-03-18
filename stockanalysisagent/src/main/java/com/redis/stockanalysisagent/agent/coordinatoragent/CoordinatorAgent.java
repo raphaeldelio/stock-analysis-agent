@@ -21,6 +21,9 @@ public class CoordinatorAgent {
 
     public ExecutionPlan createPlan(RoutingDecision routingDecision) {
         List<AgentType> selectedAgents = new ArrayList<>(new LinkedHashSet<>(selectedSpecialists(routingDecision.getSelectedAgents())));
+        if (selectedAgents.isEmpty()) {
+            throw new IllegalStateException("Coordinator returned no specialist agents.");
+        }
         selectedAgents.add(AgentType.SYNTHESIS);
 
         return new ExecutionPlan(

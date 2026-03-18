@@ -4,7 +4,6 @@ import com.redis.stockanalysisagent.agent.coordinatoragent.CoordinatorAgent;
 import com.redis.stockanalysisagent.agent.coordinatoragent.ExecutionPlan;
 import com.redis.stockanalysisagent.agent.coordinatoragent.RoutingDecision;
 import com.redis.stockanalysisagent.agent.orchestration.AgentExecution;
-import com.redis.stockanalysisagent.agent.orchestration.AgentExecutionStatus;
 import com.redis.stockanalysisagent.agent.orchestration.AgentOrchestrationService;
 import com.redis.stockanalysisagent.agent.orchestration.AnalysisRequest;
 import com.redis.stockanalysisagent.agent.orchestration.AnalysisResponse;
@@ -92,7 +91,6 @@ class ChatAnalysisService {
         }
 
         return response.agentExecutions().stream()
-                .filter(agentExecution -> agentExecution.status() != AgentExecutionStatus.SKIPPED)
                 .map(this::toExecutionStep)
                 .toList();
     }

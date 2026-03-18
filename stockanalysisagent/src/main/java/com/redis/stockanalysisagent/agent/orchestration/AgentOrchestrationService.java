@@ -17,6 +17,9 @@ import com.redis.stockanalysisagent.agent.technicalanalysisagent.TechnicalAnalys
 import com.redis.stockanalysisagent.agent.technicalanalysisagent.TechnicalAnalysisSnapshot;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @Service
 public class AgentOrchestrationService {
 
@@ -41,14 +44,11 @@ public class AgentOrchestrationService {
     }
 
     public AnalysisResponse processRequest(AnalysisRequest request, ExecutionPlan executionPlan) {
-        AgentExecutionState state = executeSelectedAgents(request, executionPlan);
-        String answer = composeAnswer(request, executionPlan, state);
-
-        return AnalysisResponse.completed(state.agentExecutions(), answer);
-    }
-
-    private AgentExecutionState executeSelectedAgents(AnalysisRequest request, ExecutionPlan executionPlan) {
-        AgentExecutionState state = new AgentExecutionState();
+        List<AgentExecution> executions = new ArrayList<>();
+        MarketSnapshot marketSnapshot = null;
+        FundamentalsSnapshot fundamentalsSnapshot = null;
+        NewsSnapshot newsSnapshot = null;
+        TechnicalAnalysisSnapshot technicalAnalysisSnapshot = null;
 
         for (AgentType agentType : executionPlan.selectedAgents()) {
             if (agentType == AgentType.SYNTHESIS) {
@@ -56,116 +56,72 @@ public class AgentOrchestrationService {
             }
 
             switch (agentType) {
-                case MARKET_DATA -> executeMarketData(request, state);
-                case FUNDAMENTALS -> executeFundamentals(request, state);
-                case NEWS -> executeNews(request, state);
-                case TECHNICAL_ANALYSIS -> executeTechnicalAnalysis(request, state);
+                case MARKET_DATA -> {
+                    long startedAt = System.nanoTime();
+                    MarketDataResult result = marketDataAgent.execute(request.ticker(), request.question());
+                    marketSnapshot = result.getFinalResponse();
+                    executions.add(new AgentExecution(
+                            AgentType.MARKET_DATA,
+                            result.getMessage(),
+                            elapsedDurationMs(startedAt),
+                            result.getTokenUsage()
+                    ));
+                }
+                case FUNDAMENTALS -> {
+                    long startedAt = System.nanoTime();
+                    FundamentalsResult result = fundamentalsAgent.execute(request.ticker(), request.question(), marketSnapshot);
+                    fundamentalsSnapshot = result.getFinalResponse();
+                    executions.add(new AgentExecution(
+                            AgentType.FUNDAMENTALS,
+                            result.getMessage(),
+                            elapsedDurationMs(startedAt),
+                            result.getTokenUsage()
+                    ));
+                }
+                case NEWS -> {
+                    long startedAt = System.nanoTime();
+                    NewsResult result = newsAgent.execute(request.ticker(), request.question());
+                    newsSnapshot = result.getFinalResponse();
+                    executions.add(new AgentExecution(
+                            AgentType.NEWS,
+                            result.getMessage(),
+                            elapsedDurationMs(startedAt),
+                            result.getTokenUsage()
+                    ));
+                }
+                case TECHNICAL_ANALYSIS -> {
+                    long startedAt = System.nanoTime();
+                    TechnicalAnalysisResult result = technicalAnalysisAgent.execute(request.ticker(), request.question());
+                    technicalAnalysisSnapshot = result.getFinalResponse();
+                    executions.add(new AgentExecution(
+                            AgentType.TECHNICAL_ANALYSIS,
+                            result.getMessage(),
+                            elapsedDurationMs(startedAt),
+                            result.getTokenUsage()
+                    ));
+                }
                 case SYNTHESIS -> throw new IllegalStateException(
                         "Synthesis should execute only after the specialized agents finish."
                 );
             }
         }
 
-        return state;
-    }
-
-    private void executeMarketData(AnalysisRequest request, AgentExecutionState state) {
-        long startedAt = System.nanoTime();
-        MarketDataResult marketDataResult = marketDataAgent.execute(request.ticker(), request.question());
-
-        state.addExecution(new AgentExecution(
-                AgentType.MARKET_DATA,
-                AgentExecutionStatus.COMPLETED,
-                marketDataResult.getMessage(),
-                elapsedDurationMs(startedAt),
-                marketDataResult.getTokenUsage()
-        ));
-        state.putStructuredOutput(AgentType.MARKET_DATA, marketDataResult.getFinalResponse());
-    }
-
-    private void executeFundamentals(AnalysisRequest request, AgentExecutionState state) {
-        long startedAt = System.nanoTime();
-        MarketSnapshot marketSnapshot = structuredOutput(state, AgentType.MARKET_DATA, MarketSnapshot.class);
-        FundamentalsResult fundamentalsResult = marketSnapshot != null
-                ? fundamentalsAgent.execute(request.ticker(), request.question(), marketSnapshot)
-                : fundamentalsAgent.execute(request.ticker(), request.question());
-
-        state.addExecution(new AgentExecution(
-                AgentType.FUNDAMENTALS,
-                AgentExecutionStatus.COMPLETED,
-                fundamentalsResult.getMessage(),
-                elapsedDurationMs(startedAt),
-                fundamentalsResult.getTokenUsage()
-        ));
-        state.putStructuredOutput(AgentType.FUNDAMENTALS, fundamentalsResult.getFinalResponse());
-    }
-
-    private void executeNews(AnalysisRequest request, AgentExecutionState state) {
-        long startedAt = System.nanoTime();
-        NewsResult newsResult = newsAgent.execute(request.ticker(), request.question());
-
-        state.addExecution(new AgentExecution(
-                AgentType.NEWS,
-                AgentExecutionStatus.COMPLETED,
-                newsResult.getMessage(),
-                elapsedDurationMs(startedAt),
-                newsResult.getTokenUsage()
-        ));
-        state.putStructuredOutput(AgentType.NEWS, newsResult.getFinalResponse());
-    }
-
-    private void executeTechnicalAnalysis(AnalysisRequest request, AgentExecutionState state) {
-        long startedAt = System.nanoTime();
-        TechnicalAnalysisResult technicalAnalysisResult = technicalAnalysisAgent.execute(request.ticker(), request.question());
-
-        state.addExecution(new AgentExecution(
-                AgentType.TECHNICAL_ANALYSIS,
-                AgentExecutionStatus.COMPLETED,
-                technicalAnalysisResult.getMessage(),
-                elapsedDurationMs(startedAt),
-                technicalAnalysisResult.getTokenUsage()
-        ));
-        state.putStructuredOutput(AgentType.TECHNICAL_ANALYSIS, technicalAnalysisResult.getFinalResponse());
-    }
-
-    private String composeAnswer(AnalysisRequest request, ExecutionPlan executionPlan, AgentExecutionState state) {
-        if (!state.hasStructuredOutputs()) {
-            state.addExecution(new AgentExecution(
-                    AgentType.SYNTHESIS,
-                    AgentExecutionStatus.SKIPPED,
-                    "Synthesis skipped because no structured outputs were available.",
-                    0,
-                    null
-            ));
-            return "I could not complete the requested analysis with the currently available agent outputs.";
-        }
-
         long synthesisStartedAt = System.nanoTime();
         SynthesisResult synthesisResult = synthesisAgent.synthesize(
                 request,
-                structuredOutput(state, AgentType.MARKET_DATA, MarketSnapshot.class),
-                structuredOutput(state, AgentType.FUNDAMENTALS, FundamentalsSnapshot.class),
-                structuredOutput(state, AgentType.NEWS, NewsSnapshot.class),
-                structuredOutput(state, AgentType.TECHNICAL_ANALYSIS, TechnicalAnalysisSnapshot.class)
+                marketSnapshot,
+                fundamentalsSnapshot,
+                newsSnapshot,
+                technicalAnalysisSnapshot
         );
-
-        state.addExecution(new AgentExecution(
+        executions.add(new AgentExecution(
                 AgentType.SYNTHESIS,
-                AgentExecutionStatus.COMPLETED,
                 "Synthesis completed.",
                 elapsedDurationMs(synthesisStartedAt),
                 synthesisResult.tokenUsage()
         ));
 
-        return synthesisResult.finalAnswer();
-    }
-
-    private <T> T structuredOutput(AgentExecutionState state, AgentType agentType, Class<T> outputType) {
-        Object output = state.structuredOutput(agentType);
-        if (outputType.isInstance(output)) {
-            return outputType.cast(output);
-        }
-        return null;
+        return AnalysisResponse.completed(executions, synthesisResult.finalAnswer());
     }
 
     private long elapsedDurationMs(long startedAt) {
