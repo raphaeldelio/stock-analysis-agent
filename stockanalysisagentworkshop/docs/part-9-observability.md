@@ -1,4 +1,4 @@
-# Part 6: Observability
+# Part 9: Observability
 
 Multi-agent systems are harder to debug than single-agent ones. When a request fans out to four agents, each making LLM and tool calls, you need to see the full picture: what was decided, what ran, what failed, how long it took, and what it cost.
 
