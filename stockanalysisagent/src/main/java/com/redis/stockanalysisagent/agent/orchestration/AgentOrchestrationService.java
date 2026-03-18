@@ -17,16 +17,9 @@ import com.redis.stockanalysisagent.agent.synthesisagent.SynthesisResult;
 import com.redis.stockanalysisagent.agent.technicalanalysisagent.TechnicalAnalysisAgent;
 import com.redis.stockanalysisagent.agent.technicalanalysisagent.TechnicalAnalysisResult;
 import com.redis.stockanalysisagent.agent.technicalanalysisagent.TechnicalAnalysisSnapshot;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.core.task.TaskExecutor;
 import org.springframework.stereotype.Service;
 
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
-import java.util.function.Supplier;
 
 @Service
 public class AgentOrchestrationService {
@@ -37,7 +30,6 @@ public class AgentOrchestrationService {
     private final NewsAgent newsAgent;
     private final TechnicalAnalysisAgent technicalAnalysisAgent;
     private final SynthesisAgent synthesisAgent;
-    private final TaskExecutor agentTaskExecutor;
 
     public AgentOrchestrationService(
             CoordinatorAgent coordinatorAgent,
@@ -45,8 +37,7 @@ public class AgentOrchestrationService {
             FundamentalsAgent fundamentalsAgent,
             NewsAgent newsAgent,
             TechnicalAnalysisAgent technicalAnalysisAgent,
-            SynthesisAgent synthesisAgent,
-            @Qualifier("agentTaskExecutor") TaskExecutor agentTaskExecutor
+            SynthesisAgent synthesisAgent
     ) {
         this.coordinatorAgent = coordinatorAgent;
         this.marketDataAgent = marketDataAgent;
@@ -54,7 +45,6 @@ public class AgentOrchestrationService {
         this.newsAgent = newsAgent;
         this.technicalAnalysisAgent = technicalAnalysisAgent;
         this.synthesisAgent = synthesisAgent;
-        this.agentTaskExecutor = agentTaskExecutor;
     }
 
     public AnalysisResponse processRequest(AnalysisRequest request, RoutingDecision routingDecision) {
@@ -89,68 +79,29 @@ public class AgentOrchestrationService {
 
     private AgentExecutionState executeSelectedAgents(AnalysisRequest request, ExecutionPlan executionPlan) {
         AgentExecutionState state = new AgentExecutionState();
-        Map<AgentType, CompletableFuture<AgentExecutionOutcome>> executionFutures = new LinkedHashMap<>();
-        CompletableFuture<AgentExecutionOutcome> marketFuture = null;
-
-        if (executionPlan.selectedAgents().contains(AgentType.MARKET_DATA)) {
-            marketFuture = submitAsync(AgentType.MARKET_DATA, () -> executeMarketData(request));
-            executionFutures.put(AgentType.MARKET_DATA, marketFuture);
-        }
 
         for (AgentType agentType : executionPlan.selectedAgents()) {
             if (agentType == AgentType.SYNTHESIS) {
                 continue;
             }
 
-            if (agentType == AgentType.MARKET_DATA) {
-                continue;
-            }
-
-            CompletableFuture<AgentExecutionOutcome> future = switch (agentType) {
-                case FUNDAMENTALS -> marketFuture != null
-                        ? marketFuture.thenApplyAsync(
-                                marketOutcome -> executeFundamentals(
-                                        request,
-                                        marketOutcome.output() instanceof MarketSnapshot snapshot ? snapshot : null
-                                ),
-                                agentTaskExecutor
-                        ).exceptionally(ex -> failedOutcome(AgentType.FUNDAMENTALS, ex))
-                        : submitAsync(AgentType.FUNDAMENTALS, () -> executeFundamentals(request, null));
-                case NEWS -> submitAsync(AgentType.NEWS, () -> executeNews(request));
-                case TECHNICAL_ANALYSIS -> submitAsync(
-                        AgentType.TECHNICAL_ANALYSIS,
-                        () -> executeTechnicalAnalysis(request)
+            AgentExecutionOutcome outcome = switch (agentType) {
+                case MARKET_DATA -> executeMarketData(request);
+                case FUNDAMENTALS -> executeFundamentals(
+                        request,
+                        structuredOutput(state, AgentType.MARKET_DATA, MarketSnapshot.class)
                 );
-                case MARKET_DATA -> executionFutures.get(AgentType.MARKET_DATA);
-                case SYNTHESIS -> CompletableFuture.completedFuture(failedOutcome(
+                case NEWS -> executeNews(request);
+                case TECHNICAL_ANALYSIS -> executeTechnicalAnalysis(request);
+                case SYNTHESIS -> failedOutcome(
                         AgentType.SYNTHESIS,
                         new IllegalStateException("Synthesis should execute only after the specialized agents finish.")
-                ));
+                );
             };
-
-            executionFutures.put(agentType, future);
-        }
-
-        CompletableFuture.allOf(executionFutures.values().toArray(CompletableFuture[]::new)).join();
-
-        for (AgentType agentType : executionPlan.selectedAgents()) {
-            if (agentType == AgentType.SYNTHESIS) {
-                continue;
-            }
-
-            AgentExecutionOutcome outcome = executionFutures.get(agentType).join();
             mergeOutcome(state, outcome);
         }
 
         return state;
-    }
-
-    private CompletableFuture<AgentExecutionOutcome> submitAsync(
-            AgentType agentType,
-            Supplier<AgentExecutionOutcome> task
-    ) {
-        return CompletableFuture.supplyAsync(task, agentTaskExecutor)
-                .exceptionally(ex -> failedOutcome(agentType, ex));
     }
 
     private AgentExecutionOutcome executeMarketData(AnalysisRequest request) {
@@ -248,8 +199,7 @@ public class AgentOrchestrationService {
     }
 
     private AgentExecutionOutcome failedOutcome(AgentType agentType, Throwable throwable, long durationMs) {
-        Throwable normalizedThrowable = unwrapThrowable(throwable);
-        String normalizedError = normalizeErrorMessage(normalizedThrowable);
+        String normalizedError = normalizeErrorMessage(throwable);
         return AgentExecutionOutcome.failed(
                 failedExecution(agentType, normalizedError, durationMs),
                 "%s failed: %s".formatted(agentType, normalizedError)
@@ -378,14 +328,6 @@ public class AgentOrchestrationService {
         }
 
         return fallback;
-    }
-
-    private Throwable unwrapThrowable(Throwable throwable) {
-        Throwable current = throwable;
-        while (current instanceof CompletionException && current.getCause() != null) {
-            current = current.getCause();
-        }
-        return current;
     }
 
     private String normalizeErrorMessage(Throwable ex) {
