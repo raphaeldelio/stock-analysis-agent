@@ -32,8 +32,12 @@ public class CoordinatorAgent {
         );
     }
 
-    public RoutingOutcome execute(String userMessage, String conversationId) {
-        CoordinatorRoutingAgent.RoutingResult routingResult = coordinatorRoutingAgent.route(userMessage, conversationId);
+    public RoutingOutcome execute(String userMessage, String conversationId, Integer retrievedMemoriesLimit) {
+        CoordinatorRoutingAgent.RoutingResult routingResult = coordinatorRoutingAgent.route(
+                userMessage,
+                conversationId,
+                retrievedMemoriesLimit
+        );
         RoutingDecision routingDecision = routingResult.routingDecision();
         if (routingDecision.getFinishReason() == RoutingDecision.FinishReason.NEEDS_MORE_INPUT) {
             routingDecision.setConversationId(conversationId);

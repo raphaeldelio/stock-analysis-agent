@@ -24,7 +24,7 @@ public class SemanticAnalysisCache {
             SemanticCacheProperties properties,
             EmbeddingModel embeddingModel,
             @Value("${spring.data.redis.host:localhost}") String redisHost,
-            @Value("${spring.data.redis.port:6379}") int redisPort
+            @Value("${spring.data.redis.port:6378}") int redisPort
     ) {
         this.semanticCache = initializeCache(properties, embeddingModel, redisHost, redisPort);
     }

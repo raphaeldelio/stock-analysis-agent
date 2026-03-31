@@ -1,6 +1,7 @@
 package com.redis.stockanalysisagent.agent.coordinatoragent;
 
 import com.redis.stockanalysisagent.agent.orchestration.TokenUsageSummary;
+import com.redis.stockanalysisagent.memory.LongTermMemoryAdvisor;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ResponseEntity;
 import org.springframework.ai.chat.model.ChatResponse;
@@ -17,11 +18,15 @@ public class CoordinatorRoutingAgent {
         this.coordinatorChatClient = coordinatorChatClient;
     }
 
-    public RoutingResult route(String userMessage, String conversationId) {
+    public RoutingResult route(String userMessage, String conversationId, Integer retrievedMemoriesLimit) {
         ResponseEntity<ChatResponse, RoutingDecision> response = coordinatorChatClient
                 .prompt()
                 .user(userMessage)
-                .advisors(spec -> spec.param(org.springframework.ai.chat.memory.ChatMemory.CONVERSATION_ID, conversationId))
+                .advisors(spec -> {
+                    spec.param(org.springframework.ai.chat.memory.ChatMemory.CONVERSATION_ID, conversationId);
+                    spec.param(LongTermMemoryAdvisor.MAX_RETRIEVED_MEMORIES,
+                            retrievedMemoriesLimit != null ? retrievedMemoriesLimit : LongTermMemoryAdvisor.DEFAULT_MAX_MEMORIES);
+                })
                 .call()
                 .responseEntity(RoutingDecision.class);
 

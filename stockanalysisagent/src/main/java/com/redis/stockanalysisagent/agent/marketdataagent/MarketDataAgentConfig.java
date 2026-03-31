@@ -30,7 +30,10 @@ public class MarketDataAgentConfig {
             """;
 
     @Bean("marketDataChatClient")
-    public ChatClient marketDataChatClient(ChatModel chatModel, MarketDataTools marketDataTools) {
+    public ChatClient marketDataChatClient(
+            ChatModel chatModel,
+            MarketDataTools marketDataTools
+    ) {
         return ChatClient.builder(chatModel)
                 .defaultAdvisors(AdvisorParams.ENABLE_NATIVE_STRUCTURED_OUTPUT)
                 .defaultTools(marketDataTools)

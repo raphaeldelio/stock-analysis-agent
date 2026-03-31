@@ -137,6 +137,7 @@ From the repository root, the most useful commands are:
 
 If you want to run the real application locally, you will usually want:
 
+- Ollama
 - Redis
 - Agent Memory Server
 - Redis Insight
@@ -149,7 +150,13 @@ The repository already includes a local Docker stack in:
 Start it with:
 
 ```bash
-docker compose up -d redis agent-memory-server redis-insight
+docker compose up -d redis ollama agent-memory-server agent-memory-task-worker redis-insight
+```
+
+If you want Compose to pre-load the default Ollama models into its own volume, run this once:
+
+```bash
+docker compose --profile ollama-setup up ollama-model-loader
 ```
 
 If you also want tracing:
@@ -167,11 +174,14 @@ For local secrets and machine-specific settings, use:
 
 Typical local values include:
 
-- `OPENAI_API_KEY`
+- `OLLAMA_BASE_URL`
+- `OLLAMA_CHAT_MODEL`
 - Twelve Data API key from [Twelve Data](https://twelvedata.com/docs)
 - Tavily API key from [Tavily](https://app.tavily.com/home)
 - SEC user agent
 - Agent Memory Server URL
+
+Embeddings are disabled by default in the repo now. If you want semantic cache or Redis long-term memory back, opt in with the commented embedding settings in [/.env.example](/Users/raphaeldelio/Documents/GitHub/stock-analysis-agent/.env.example).
 
 Both Spring Boot apps load `.env` and `application-local.*` automatically when those files exist in either the repository root or the module directory.
 
@@ -184,7 +194,7 @@ Both Spring Boot apps load `.env` and `application-local.*` automatically when t
   Finished application
 
 - [compose.yaml](/Users/raphaeldelio/Documents/GitHub/stock-analysis-agent/compose.yaml)
-  Local Redis, Agent Memory Server, Redis Insight, and Zipkin stack
+  Local Ollama, Redis, Agent Memory Server, Redis Insight, and Zipkin stack
 
 - [docs](/Users/raphaeldelio/Documents/GitHub/stock-analysis-agent/docs)
   Supporting planning and project documentation

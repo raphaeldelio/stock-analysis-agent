@@ -29,7 +29,9 @@ public class SynthesisAgentConfig {
             """;
 
     @Bean("synthesisChatClient")
-    public ChatClient synthesisChatClient(ChatModel chatModel) {
+    public ChatClient synthesisChatClient(
+            ChatModel chatModel
+    ) {
         return ChatClient.builder(chatModel)
                 .defaultAdvisors(AdvisorParams.ENABLE_NATIVE_STRUCTURED_OUTPUT)
                 .defaultSystem(DEFAULT_PROMPT)

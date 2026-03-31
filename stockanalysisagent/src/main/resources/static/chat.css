@@ -179,6 +179,19 @@ body::before {
     background: rgba(13, 26, 34, 1);
 }
 
+.identity-input--numeric {
+    width: 6.5rem;
+    text-align: right;
+    appearance: textfield;
+    -moz-appearance: textfield;
+}
+
+.identity-input--numeric::-webkit-outer-spin-button,
+.identity-input--numeric::-webkit-inner-spin-button {
+    margin: 0;
+    -webkit-appearance: none;
+}
+
 .composer textarea {
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
@@ -886,6 +899,10 @@ body::before {
     .identity-item {
         flex: 1 1 13rem;
         min-width: 0;
+    }
+
+    .identity-input--numeric {
+        width: 100%;
     }
 
     .message {

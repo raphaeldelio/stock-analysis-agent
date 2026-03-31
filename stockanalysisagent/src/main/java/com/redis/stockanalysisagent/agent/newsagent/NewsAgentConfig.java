@@ -30,7 +30,10 @@ public class NewsAgentConfig {
             """;
 
     @Bean("newsChatClient")
-    public ChatClient newsChatClient(ChatModel chatModel, NewsTools newsTools) {
+    public ChatClient newsChatClient(
+            ChatModel chatModel,
+            NewsTools newsTools
+    ) {
         return ChatClient.builder(chatModel)
                 .defaultAdvisors(AdvisorParams.ENABLE_NATIVE_STRUCTURED_OUTPUT)
                 .defaultTools(newsTools)

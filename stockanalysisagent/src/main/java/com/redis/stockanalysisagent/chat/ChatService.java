@@ -37,7 +37,7 @@ public class ChatService {
         this.semanticAnalysisCache = semanticAnalysisCache;
     }
 
-    public ChatTurn chat(String userId, String sessionId, String message) {
+    public ChatTurn chat(String userId, String sessionId, String message, Integer retrievedMemoriesLimit) {
         String conversationId = AmsChatMemoryRepository.createConversationId(userId, sessionId);
         String normalizedMessage = message == null ? "" : message.trim();
         List<ChatExecutionStep> executionSteps = new ArrayList<>();
@@ -70,7 +70,11 @@ public class ChatService {
                 null
         ));
 
-        ChatAnalysisService.AnalysisTurn analysisTurn = chatAnalysisService.analyze(normalizedMessage, conversationId);
+        ChatAnalysisService.AnalysisTurn analysisTurn = chatAnalysisService.analyze(
+                normalizedMessage,
+                conversationId,
+                retrievedMemoriesLimit
+        );
         executionSteps.addAll(analysisTurn.executionSteps());
         if (analysisTurn.cacheable()) {
             semanticAnalysisCache.store(normalizedMessage, analysisTurn.response());

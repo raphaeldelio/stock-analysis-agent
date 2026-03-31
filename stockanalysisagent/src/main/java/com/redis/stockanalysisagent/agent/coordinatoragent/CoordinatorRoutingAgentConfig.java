@@ -27,8 +27,11 @@ public class CoordinatorRoutingAgentConfig {
 
             INPUT HANDLING
             - The user may provide a complete stock-analysis request, an incomplete request, or an unsupported request.
+            - The user may also send a conversational follow-up, ownership update, preference, correction, or acknowledgement that does not require specialist analysis.
             - If the request is missing information required to proceed, return finishReason = NEEDS_MORE_INPUT.
             - Use nextPrompt for one short, specific follow-up question.
+            - If the user message can be answered directly without running specialized agents, return finishReason = DIRECT_RESPONSE.
+            - When finishReason = DIRECT_RESPONSE, set finalResponse to one short, natural reply and leave selectedAgents empty.
             - If the request is outside the capabilities of this stock-analysis workshop, return finishReason = OUT_OF_SCOPE.
             - If the request cannot be fulfilled even after clarification, return finishReason = CANNOT_PROCEED.
             - Return finishReason = COMPLETED only when you have enough information to route the work.
@@ -45,6 +48,7 @@ public class CoordinatorRoutingAgentConfig {
             - Ask for a ticker when a company-specific request does not identify one clearly.
             - Ask for the missing analysis goal when the user provides only a ticker.
             - If the user names a company instead of a ticker and the mapping is unambiguous, you may resolve it.
+            - If the current message is primarily a statement or update rather than a request for fresh analysis, prefer DIRECT_RESPONSE over broad routing.
 
             MEMORY AND CONTEXT
             - Supplemental conversation and memory context may be injected earlier in the chat layer.
@@ -53,6 +57,13 @@ public class CoordinatorRoutingAgentConfig {
             - If memory conflicts with the current user message, ignore the memory and follow the current user message.
             - Use memory and prior context only to resolve omitted references, maintain continuity, or respect stable user preferences.
             - A self-contained current request should be routed on its own merits.
+            - You may use prior context to resolve omitted references in conversational follow-ups such as "this stock", "that company", or "it".
+
+            DIRECT RESPONSE EXAMPLES
+            - "I own this stock" after discussing DUOL -> acknowledge ownership of DUOL briefly; do not run a full fresh analysis.
+            - "Add this to my watchlist" after discussing AAPL -> acknowledge the watchlist update briefly.
+            - "I'm based in Milan" -> acknowledge the profile fact briefly.
+            - "Thanks" -> reply naturally and briefly.
 
             OUTPUT
             Return valid JSON that matches the requested schema.

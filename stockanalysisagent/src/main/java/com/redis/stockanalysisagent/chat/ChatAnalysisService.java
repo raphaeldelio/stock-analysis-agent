@@ -37,9 +37,13 @@ class ChatAnalysisService {
         this.observationRegistry = observationRegistry;
     }
 
-    AnalysisTurn analyze(String request, String conversationId) {
+    AnalysisTurn analyze(String request, String conversationId, Integer retrievedMemoriesLimit) {
         long coordinatorStartedAt = System.nanoTime();
-        CoordinatorAgent.RoutingOutcome routingOutcome = observeCoordinator(request, conversationId);
+        CoordinatorAgent.RoutingOutcome routingOutcome = observeCoordinator(
+                request,
+                conversationId,
+                retrievedMemoriesLimit
+        );
         RoutingDecision routingDecision = routingOutcome.routingDecision();
         List<ChatExecutionStep> executionSteps = new ArrayList<>();
         executionSteps.add(analysisStep(
@@ -52,6 +56,15 @@ class ChatAnalysisService {
         if (routingDecision.getFinishReason() == RoutingDecision.FinishReason.NEEDS_MORE_INPUT) {
             return new AnalysisTurn(
                     routingDecision.getNextPrompt(),
+                    List.copyOf(executionSteps),
+                    false,
+                    TokenUsageSummary.sum(executionSteps.stream().map(ChatExecutionStep::tokenUsage).toList())
+            );
+        }
+
+        if (routingDecision.getFinishReason() == RoutingDecision.FinishReason.DIRECT_RESPONSE) {
+            return new AnalysisTurn(
+                    resolveCoordinatorMessage(routingDecision),
                     List.copyOf(executionSteps),
                     false,
                     TokenUsageSummary.sum(executionSteps.stream().map(ChatExecutionStep::tokenUsage).toList())
@@ -80,12 +93,20 @@ class ChatAnalysisService {
         );
     }
 
-    private CoordinatorAgent.RoutingOutcome observeCoordinator(String request, String conversationId) {
+    private CoordinatorAgent.RoutingOutcome observeCoordinator(
+            String request,
+            String conversationId,
+            Integer retrievedMemoriesLimit
+    ) {
         Observation observation = coordinatorObservation(observationRegistry)
                 .highCardinalityKeyValue(KEY_CONVERSATION_ID, conversationId)
                 .start();
         try {
-            CoordinatorAgent.RoutingOutcome outcome = coordinatorAgent.execute(request, conversationId);
+            CoordinatorAgent.RoutingOutcome outcome = coordinatorAgent.execute(
+                    request,
+                    conversationId,
+                    retrievedMemoriesLimit
+            );
             enrichWithRoutingDecision(observation, outcome.routingDecision());
             enrichWithTokenUsage(observation, outcome.tokenUsage());
             return outcome;
@@ -148,6 +169,7 @@ class ChatAnalysisService {
 
                 yield reasoning == null ? baseSummary : "%s Reasoning: %s".formatted(baseSummary, reasoning);
             }
+            case DIRECT_RESPONSE -> routingDecision.getFinalResponse();
             case NEEDS_MORE_INPUT -> routingDecision.getNextPrompt();
             case OUT_OF_SCOPE, CANNOT_PROCEED -> routingDecision.getFinalResponse();
         };

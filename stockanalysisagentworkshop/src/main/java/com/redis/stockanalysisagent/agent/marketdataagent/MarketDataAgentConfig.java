@@ -16,7 +16,10 @@ public class MarketDataAgentConfig {
             """;
 
     @Bean("marketDataChatClient")
-    public ChatClient marketDataChatClient(ChatModel chatModel, MarketDataTools marketDataTools) {
+    public ChatClient marketDataChatClient(
+            ChatModel chatModel,
+            MarketDataTools marketDataTools
+    ) {
         // PART 2 STEP 2:
         // Replace the return statement below with the snippet from the Part 2 guide.
         return ChatClient.builder(chatModel)
