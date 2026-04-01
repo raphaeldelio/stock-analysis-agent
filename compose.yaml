@@ -6,7 +6,7 @@ services:
       - "8000:8000"
     environment:
       # In this local setup the Agent Memory Server image reaches Redis through the host-mapped port.
-      REDIS_URL: redis://redis:6378
+      REDIS_URL: redis://redis:6379
       PORT: 8000
       GENERATION_MODEL: ${AGENT_MEMORY_GENERATION_MODEL:-gpt-4o-mini}
       EMBEDDING_MODEL: ${AGENT_MEMORY_EMBEDDING_MODEL:-text-embedding-3-small}
@@ -14,13 +14,14 @@ services:
       LONG_TERM_MEMORY: "true"
       ENABLE_TOPIC_EXTRACTION: "true"
       SUMMARIZATION_THRESHOLD: 0.7
+      COMPACTION_EVERY_MINUTES: 2
       DEDUPLICATION_DISTANCE_THRESHOLD: 0.35
       ENABLE_NER: "true"
       DISABLE_AUTH: "true"
     depends_on:
       redis:
         condition: service_healthy
-    command: ["agent-memory", "api", "--host", "0.0.0.0", "--port", "8000", "--task-backend=asyncio"]
+    command: ["agent-memory", "api", "--host", "0.0.0.0", "--port", "8000", "--task-backend", "docket"]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/v1/health"]
       interval: 10s
@@ -28,11 +29,32 @@ services:
       retries: 5
       start_period: 10s
 
+  agent-memory-task-worker:
+    image: redislabs/agent-memory-server:latest
+    container_name: stock-analysis-agent-memory-worker
+    environment:
+      REDIS_URL: redis://redis:6379
+      GENERATION_MODEL: ${AGENT_MEMORY_GENERATION_MODEL:-gpt-4o-mini}
+      EMBEDDING_MODEL: ${AGENT_MEMORY_EMBEDDING_MODEL:-text-embedding-3-small}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      LONG_TERM_MEMORY: "true"
+      ENABLE_TOPIC_EXTRACTION: "true"
+      SUMMARIZATION_THRESHOLD: 0.7
+      COMPACTION_EVERY_MINUTES: 2
+      DEDUPLICATION_DISTANCE_THRESHOLD: 0.35
+      ENABLE_NER: "true"
+      DISABLE_AUTH: "true"
+    depends_on:
+      redis:
+        condition: service_healthy
+    command: ["agent-memory", "task-worker"]
+    restart: unless-stopped
+
   redis:
     image: redis/redis-stack-server:latest
     container_name: stock-analysis-agent-redis
     ports:
-      - "6378:6378"
+      - "6378:6379"
     volumes:
       - redis-data:/data
     environment:
@@ -47,10 +69,10 @@ services:
     image: redis/redisinsight:latest
     container_name: stock-analysis-agent-redis-insight
     ports:
-      - "5540:5540"
+      - "5541:5540"
     environment:
       RI_REDIS_HOST: redis
-      RI_REDIS_PORT: 6378
+      RI_REDIS_PORT: 6379
       RI_REDIS_ALIAS: Stock Analysis Redis
       RI_REDIS_USERNAME: default
       RI_REDIS_PASSWORD:
@@ -68,5 +90,6 @@ services:
       - "9411:9411"
 
 volumes:
+  ollama-data:
   redis-data:
   redis-insight-data:

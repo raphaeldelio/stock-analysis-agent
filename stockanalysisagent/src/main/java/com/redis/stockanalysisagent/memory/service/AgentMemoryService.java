@@ -5,12 +5,15 @@ import com.redis.agentmemory.exceptions.MemoryClientException;
 import com.redis.agentmemory.models.longtermemory.MemoryRecordResults;
 import com.redis.agentmemory.models.longtermemory.SearchRequest;
 import com.redis.agentmemory.models.workingmemory.MemoryMessage;
+import com.redis.agentmemory.models.workingmemory.MemoryStrategyConfig;
 import com.redis.agentmemory.models.workingmemory.WorkingMemory;
 import com.redis.agentmemory.models.workingmemory.WorkingMemoryResponse;
+import com.redis.agentmemory.models.workingmemory.WorkingMemoryResult;
 import com.redis.agentmemory.models.workingmemory.SessionListResponse;
-import org.springframework.beans.factory.annotation.Value;
+import com.redis.stockanalysisagent.memory.AgentMemoryProperties;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -18,13 +21,15 @@ public class AgentMemoryService {
 
     private final MemoryAPIClient client;
     private final String namespace;
+    private final MemoryStrategyConfig longTermMemoryStrategy;
 
     public AgentMemoryService(
             MemoryAPIClient client,
-            @Value("${agent-memory.server.namespace:stock-analysis}") String namespace
+            AgentMemoryProperties properties
     ) {
         this.client = client;
-        this.namespace = namespace;
+        this.namespace = properties.getServer().getNamespace();
+        this.longTermMemoryStrategy = properties.toLongTermMemoryStrategy();
     }
 
     public WorkingMemoryResponse getWorkingMemory(String sessionId, String userId, String modelName) {
@@ -48,14 +53,39 @@ public class AgentMemoryService {
             String userId,
             String modelName
     ) {
-        run("append working-memory messages", () -> client.workingMemory().appendMessagesToWorkingMemory(
-                sessionId,
-                messages,
-                namespace,
-                modelName,
-                null,
-                userId
-        ));
+        run("append working-memory messages", () -> {
+            WorkingMemoryResponse current = getOrCreateWorkingMemory(sessionId, userId, modelName);
+            String resolvedUserId = userId != null ? userId : current.getUserId();
+
+            List<MemoryMessage> mergedMessages = new ArrayList<>();
+            if (current.getMessages() != null) {
+                mergedMessages.addAll(current.getMessages());
+            }
+            mergedMessages.addAll(messages);
+
+            WorkingMemory updated = WorkingMemory.builder()
+                    .sessionId(sessionId)
+                    .messages(mergedMessages)
+                    .memories(current.getMemories())
+                    .data(current.getData())
+                    .context(current.getContext())
+                    .userId(resolvedUserId)
+                    .tokens(current.getTokens())
+                    .namespace(current.getNamespace() != null ? current.getNamespace() : namespace)
+                    .longTermMemoryStrategy(longTermMemoryStrategy)
+                    .ttlSeconds(current.getTtlSeconds())
+                    .lastAccessed(current.getLastAccessed())
+                    .build();
+
+            client.workingMemory().putWorkingMemory(
+                    sessionId,
+                    updated,
+                    resolvedUserId,
+                    namespace,
+                    modelName,
+                    null
+            );
+        });
     }
 
     public void putWorkingMemory(
@@ -64,9 +94,10 @@ public class AgentMemoryService {
             String userId,
             String modelName
     ) {
+        WorkingMemory normalized = normalizeWorkingMemory(memory);
         run("put working memory", () -> client.workingMemory().putWorkingMemory(
                 sessionId,
-                memory,
+                normalized,
                 userId,
                 namespace,
                 modelName,
@@ -89,6 +120,38 @@ public class AgentMemoryService {
 
     public String namespace() {
         return namespace;
+    }
+
+    public MemoryStrategyConfig longTermMemoryStrategy() {
+        return longTermMemoryStrategy;
+    }
+
+    private WorkingMemoryResponse getOrCreateWorkingMemory(String sessionId, String userId, String modelName) {
+        WorkingMemoryResult result = call("get or create working memory", () -> client.workingMemory().getOrCreateWorkingMemory(
+                sessionId,
+                namespace,
+                userId,
+                modelName,
+                null,
+                longTermMemoryStrategy
+        ));
+        return result != null ? result.getMemory() : null;
+    }
+
+    private WorkingMemory normalizeWorkingMemory(WorkingMemory memory) {
+        return WorkingMemory.builder()
+                .sessionId(memory.getSessionId())
+                .messages(memory.getMessages())
+                .memories(memory.getMemories())
+                .data(memory.getData())
+                .context(memory.getContext())
+                .userId(memory.getUserId())
+                .tokens(memory.getTokens())
+                .namespace(memory.getNamespace() != null ? memory.getNamespace() : namespace)
+                .longTermMemoryStrategy(longTermMemoryStrategy)
+                .ttlSeconds(memory.getTtlSeconds())
+                .lastAccessed(memory.getLastAccessed())
+                .build();
     }
 
     private <T> T call(String action, MemoryCall<T> operation) {

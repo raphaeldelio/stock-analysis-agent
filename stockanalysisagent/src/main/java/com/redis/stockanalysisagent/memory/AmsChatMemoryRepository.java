@@ -204,11 +204,17 @@ public class AmsChatMemoryRepository implements ChatMemoryRepository {
         }
 
         WorkingMemory withTtl = WorkingMemory.builder()
-                .namespace(agentMemoryService.namespace())
                 .sessionId(sessionId)
                 .messages(current.getMessages())
+                .memories(current.getMemories())
+                .data(current.getData())
+                .context(current.getContext())
                 .userId(userId)
+                .tokens(current.getTokens())
+                .namespace(agentMemoryService.namespace())
+                .longTermMemoryStrategy(agentMemoryService.longTermMemoryStrategy())
                 .ttlSeconds(DEFAULT_TTL_SECONDS)
+                .lastAccessed(current.getLastAccessed())
                 .build();
 
         agentMemoryService.putWorkingMemory(

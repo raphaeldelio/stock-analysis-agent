@@ -4,7 +4,6 @@ import com.redis.agentmemory.MemoryAPIClient;
 import com.redis.stockanalysisagent.memory.service.AgentMemoryService;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -13,11 +12,10 @@ public class AgentMemoryConfig {
 
     @Bean
     public MemoryAPIClient memoryAPIClient(
-            @Value("${agent-memory.server.url}") String serverUrl,
-            @Value("${agent-memory.server.namespace:stock-analysis}") String namespace
+            AgentMemoryProperties properties
     ) {
-        return MemoryAPIClient.builder(serverUrl)
-                .defaultNamespace(namespace)
+        return MemoryAPIClient.builder(properties.getServer().getUrl())
+                .defaultNamespace(properties.getServer().getNamespace())
                 .timeout(30.0)
                 .build();
     }
